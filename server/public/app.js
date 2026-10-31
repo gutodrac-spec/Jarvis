@@ -37,7 +37,11 @@ function connect() {
   ws.onopen = () => log("Conectado ao servidor.", "sys");
   ws.onclose = (e) => {
     $("agentDot").className = "dot off";
-    if (e.code === 4001) { store.del("jarvis_token"); token = ""; return show("setup"); }
+    if (e.code === 4001) {
+      store.del("jarvis_token"); token = "";
+      tokenError("Token incorreto. No terminal do Codespace rode: cat server/data/token");
+      return show("setup");
+    }
     setTimeout(connect, 2000);
   };
   ws.onmessage = (ev) => {
@@ -312,12 +316,33 @@ async function checkPush() {
 }
 
 // ---------------- Eventos ----------------
-$("saveToken").onclick = () => {
-  token = $("tokenInput").value.trim();
-  if (!token) return;
-  store.set("jarvis_token", token);
-  boot();
+function tokenError(msg) {
+  $("tokenMsg").textContent = msg;
+}
+
+// Confere o token no servidor antes de entrar (e explica o erro na tela)
+$("saveToken").onclick = async () => {
+  const t = $("tokenInput").value.trim().replace(/^["']|["']$/g, "").replace(/^token:\s*/i, "");
+  if (!t) return tokenError("Digite o token.");
+  $("saveToken").disabled = true;
+  tokenError("Conferindo…");
+  try {
+    const r = await fetch("/api/status", { headers: { "x-jarvis-token": t }, redirect: "manual" });
+    if (r.status === 401) return tokenError("Token incorreto. No terminal do Codespace rode: cat server/data/token");
+    if (r.type === "opaqueredirect" || !r.ok) {
+      return tokenError("O servidor pediu login do GitHub: a porta 8787 está privada. No Codespace, aba PORTAS → porta 8787 → Visibilidade → Public.");
+    }
+    token = t;
+    store.set("jarvis_token", token);
+    tokenError("");
+    boot();
+  } catch (e) {
+    tokenError("Não consegui falar com o servidor (" + e.message + "). Ele está rodando? Rode: bash .devcontainer/start.sh");
+  } finally {
+    $("saveToken").disabled = false;
+  }
 };
+$("tokenInput").onkeydown = (e) => { if (e.key === "Enter") $("saveToken").click(); };
 $("enablePush").onclick = enablePush;
 $("accept").onclick = acceptCall;
 $("decline").onclick = declineCall;

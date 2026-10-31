@@ -93,3 +93,5 @@ input[type=checkbox] { width: auto; }
 .flow p { margin: 0; font-size: 14px; }
 .small { font-size: 12px; }
 .ok { color: var(--green); }
+
+.tokenmsg { color: #ffb4b4; font-size: 14px; min-height: 1em; margin: 0; }
