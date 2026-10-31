@@ -1,0 +1,16 @@
+{
+  "name": "jarvis-server",
+  "version": "1.0.0",
+  "description": "Jarvis - servidor de chamadas (Web Push) e ponte WebSocket entre o PC e o app web",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "web-push": "^3.6.7",
+    "ws": "^8.18.0"
+  }
+}

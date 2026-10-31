@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#05080f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Jarvis</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <!-- Configuração inicial -->
+  <section id="setup" class="screen hidden">
+    <div class="card">
+      <div class="orb small"></div>
+      <h1>Jarvis</h1>
+      <p>Digite o token do seu servidor (o mesmo <code>JARVIS_TOKEN</code>).</p>
+      <input id="tokenInput" type="password" placeholder="Token" autocomplete="off" />
+      <button id="saveToken" class="btn primary">Conectar</button>
+    </div>
+  </section>
+
+  <!-- Tela principal -->
+  <section id="home" class="screen hidden">
+    <header>
+      <div class="brand"><div class="orb tiny"></div><span>J.A.R.V.I.S.</span></div>
+      <span id="agentDot" class="dot off" title="PC"></span>
+    </header>
+
+    <div id="notifBanner" class="banner hidden">
+      <span>Ative as notificações para o Jarvis poder te ligar.</span>
+      <button id="enablePush" class="btn small primary">Ativar</button>
+    </div>
+
+    <div class="screenbox">
+      <img id="screenImg" alt="" />
+      <div id="screenEmpty">Tela do PC desligada</div>
+    </div>
+    <div class="row">
+      <button id="toggleStream" class="btn">👁️ Ver tela</button>
+      <button id="callNow" class="btn">📞 Falar com Jarvis</button>
+      <button id="stopTask" class="btn danger">⛔ Parar</button>
+      <a id="parsecLink" class="btn hidden" target="_blank" rel="noopener">🖥️ Parsec</a>
+    </div>
+
+    <div id="log" class="log"></div>
+
+    <form id="chatForm" class="chat">
+      <input id="chatInput" placeholder="Peça algo ao Jarvis…" autocomplete="off" />
+      <button class="btn primary" type="submit">Enviar</button>
+    </form>
+    <details class="settings">
+      <summary>Configurações</summary>
+      <label>Link do Parsec (opcional)<input id="parsecInput" placeholder="https://parsec.app/…" /></label>
+      <label><input type="checkbox" id="voiceToggle" checked /> Jarvis fala em voz alta</label>
+      <button id="testCall" class="btn small">Testar chamada</button>
+      <button id="logout" class="btn small danger">Trocar token</button>
+    </details>
+  </section>
+
+  <!-- Chamada recebida -->
+  <section id="incoming" class="screen call hidden">
+    <div class="caller">
+      <div class="orb ring"></div>
+      <h2>Jarvis está te ligando</h2>
+      <p id="callReason" class="reason"></p>
+      <span id="callUrgency" class="tag"></span>
+    </div>
+    <div class="callbtns">
+      <button id="decline" class="round red">✕<small>Recusar</small></button>
+      <button id="accept" class="round green">✆<small>Atender</small></button>
+    </div>
+  </section>
+
+  <!-- Em chamada -->
+  <section id="incall" class="screen call hidden">
+    <div class="caller">
+      <div id="talkOrb" class="orb"></div>
+      <h2>Jarvis</h2>
+      <p id="callTimer" class="muted">00:00</p>
+      <p id="liveText" class="live"></p>
+      <p id="heard" class="heard"></p>
+    </div>
+    <div class="callbtns">
+      <button id="muteBtn" class="round gray">🎙️<small>Microfone</small></button>
+      <button id="hangup" class="round red">✕<small>Desligar</small></button>
+    </div>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>
