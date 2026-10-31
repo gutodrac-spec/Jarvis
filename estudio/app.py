@@ -12,6 +12,7 @@ Por que é rápido:
 Variáveis de ambiente (todas opcionais):
   ESTUDIO_SHARE        "1" para gerar link público (Kaggle/Colab)
   ESTUDIO_PRECARREGAR  "1" para carregar o modelo antes de abrir a interface
+  ESTUDIO_SITE         "usuario/estudio": HF Space estático que recebe o link atual (precisa de HF_TOKEN)
   ESTUDIO_MODELO       "destilado" (padrão) ou "normal" (LTX 0.9.5 completo, mais lento)
   ESTUDIO_DTYPE        "fp16" ou "bf16" (padrão: bf16 se a GPU tiver suporte nativo, senão fp16)
 """
@@ -190,6 +191,21 @@ def gerar(prompt, preset, imagem, formato, segundos, qualidade, semente):
     return saida, f"semente {semente} · {largura}x{altura} · {len(quadros)} quadros · modelo {M['modo']}"
 
 
+def registrar_link(link: str, site: str):
+    """Grava o link público atual em url.txt no site (HF Space estático),
+    para a página de lá se conectar sozinha a este Colab."""
+    from huggingface_hub import HfApi
+
+    try:
+        HfApi(token=os.environ.get("HF_TOKEN")).upload_file(
+            path_or_fileobj=link.encode(), path_in_repo="url.txt", repo_id=site, repo_type="space",
+            commit_message="link do Colab atualizado",
+        )
+        print(f"[estudio] site https://huggingface.co/spaces/{site} agora aponta para {link}")
+    except Exception as erro:  # noqa: BLE001
+        print(f"[estudio] não consegui atualizar o site ({erro}); use o link acima direto.")
+
+
 with gr.Blocks(title="Estúdio") as demo:
     gr.Markdown("# 🎬 Estúdio\nTexto ou imagem → vídeo, com movimentos de câmera prontos.")
     with gr.Row():
@@ -217,7 +233,11 @@ with gr.Blocks(title="Estúdio") as demo:
 if __name__ == "__main__":
     if os.environ.get("ESTUDIO_PRECARREGAR") == "1":
         _carregar()
-    demo.queue().launch(
+    _, _, link = demo.queue().launch(
         server_name="0.0.0.0",
         share=os.environ.get("ESTUDIO_SHARE") == "1",
+        prevent_thread_lock=True,
     )
+    if link and os.environ.get("ESTUDIO_SITE"):
+        registrar_link(link, os.environ["ESTUDIO_SITE"])
+    demo.block_thread()

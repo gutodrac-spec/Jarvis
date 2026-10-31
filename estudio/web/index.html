@@ -107,6 +107,11 @@ for (const [nome, ic] of PRESETS) {
 }
 
 $("api").value = ler("estudio-api") || "";
+// No site do HF Space, o Colab grava o link atual em url.txt: usa ele automaticamente.
+fetch("url.txt", { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).then((t) => {
+  t = t.trim();
+  if (t.startsWith("https://")) { $("api").value = t; $("status").textContent = "Conectado ao Colab ligado."; }
+}).catch(() => {});
 const historico = [];
 
 function mostrar(url, legenda) {
