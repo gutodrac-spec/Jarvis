@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estúdio</title>
+<style>
+  :root {
+    --bg: #0b0b10; --painel: #15151d; --borda: #26263a; --texto: #ececf4;
+    --suave: #9a9ab0; --destaque: #a78bfa; --destaque-forte: #7c3aed;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--texto);
+         font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  .sub { color: var(--suave); margin: 0 0 20px; }
+  .grade { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+  @media (max-width: 820px) { .grade { grid-template-columns: 1fr; } }
+  .painel { background: var(--painel); border: 1px solid var(--borda); border-radius: 14px; padding: 16px; }
+  label { display: block; font-size: 13px; color: var(--suave); margin: 14px 0 6px; }
+  input, textarea, select { width: 100%; background: var(--bg); color: var(--texto);
+    border: 1px solid var(--borda); border-radius: 10px; padding: 10px; font: inherit; }
+  textarea { resize: vertical; min-height: 80px; }
+  .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  .preset { background: var(--bg); border: 1px solid var(--borda); border-radius: 10px;
+    padding: 10px 6px; color: var(--texto); cursor: pointer; font-size: 13px; text-align: center; }
+  .preset .ic { display: block; font-size: 20px; }
+  .preset[aria-pressed="true"] { border-color: var(--destaque); box-shadow: 0 0 0 1px var(--destaque) inset; }
+  .linha { display: flex; gap: 10px; } .linha > * { flex: 1; }
+  button.gerar { width: 100%; margin-top: 18px; padding: 13px; border: 0; border-radius: 12px;
+    background: linear-gradient(90deg, var(--destaque-forte), var(--destaque)); color: white;
+    font-weight: 600; font-size: 16px; cursor: pointer; }
+  button.gerar:disabled { opacity: .5; cursor: wait; }
+  #status { color: var(--suave); font-size: 13px; min-height: 20px; margin-top: 8px; }
+  .resultado video { width: 100%; border-radius: 10px; background: #000; }
+  .historico { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 16px; }
+  .historico figure { margin: 0; } .historico video { width: 100%; border-radius: 8px; }
+  .historico figcaption { font-size: 12px; color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vazio { color: var(--suave); text-align: center; padding: 60px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🎬 Estúdio</h1>
+  <p class="sub">Texto ou imagem → vídeo com movimentos de câmera. Roda no seu Colab ou Space.</p>
+
+  <div class="grade">
+    <section class="painel">
+      <label for="api">Endereço da API (link do Colab <code>…gradio.live</code> ou Space <code>usuario/estudio</code>)</label>
+      <input id="api" placeholder="https://xxxx.gradio.live">
+
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" placeholder="uma astronauta caminhando num deserto ao pôr do sol"></textarea>
+
+      <label for="imagem">Imagem inicial (opcional)</label>
+      <input id="imagem" type="file" accept="image/*">
+
+      <label>Movimento de câmera</label>
+      <div class="presets" id="presets"></div>
+
+      <div class="linha">
+        <div><label for="formato">Formato</label>
+          <select id="formato"><option>16:9</option><option>9:16</option><option>1:1</option></select></div>
+        <div><label for="segundos">Duração</label>
+          <select id="segundos"><option value="2">2 s</option><option value="3" selected>3 s</option><option value="4">4 s</option><option value="5">5 s</option></select></div>
+      </div>
+
+      <button class="gerar" id="gerar">Gerar</button>
+      <div id="status"></div>
+    </section>
+
+    <section class="painel resultado">
+      <div id="atual"><div class="vazio">Seu vídeo aparece aqui.</div></div>
+      <div class="historico" id="historico"></div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client@1.8.0/dist/index.min.js";
+
+// Mesmos nomes de presets.py
+const PRESETS = [
+  ["Livre (sem preset)", "✏️"], ["Dolly In", "⏩"], ["Dolly Out", "⏪"], ["Crash Zoom", "💥"],
+  ["Órbita 360", "🔄"], ["Drone FPV", "🚁"], ["Grua para cima", "🏗️"], ["Pan esquerda", "⬅️"],
+  ["Pan direita", "➡️"], ["Tilt para cima", "⬆️"], ["Câmera na mão", "✋"], ["Bullet Time", "🕶️"],
+  ["Snorricam", "🎯"], ["Dolly Zoom", "🌀"], ["Super Dolly", "🚀"], ["Estático", "📷"],
+];
+const $ = (id) => document.getElementById(id);
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const ler = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+
+let preset = "Dolly In";
+for (const [nome, ic] of PRESETS) {
+  const b = document.createElement("button");
+  b.className = "preset"; b.type = "button";
+  b.innerHTML = `<span class="ic">${ic}</span>${nome}`;
+  b.setAttribute("aria-pressed", nome === preset);
+  b.onclick = () => {
+    preset = nome;
+    document.querySelectorAll(".preset").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  };
+  $("presets").append(b);
+}
+
+$("api").value = ler("estudio-api") || "";
+const historico = [];
+
+function mostrar(url, legenda) {
+  $("atual").innerHTML = `<video src="${url}" controls autoplay loop playsinline></video>`;
+  historico.unshift({ url, legenda });
+  $("historico").innerHTML = historico.slice(1).map((h) =>
+    `<figure><video src="${h.url}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>
+     <figcaption title="${h.legenda}">${h.legenda}</figcaption></figure>`).join("");
+}
+
+$("gerar").onclick = async () => {
+  const api = $("api").value.trim();
+  const prompt = $("prompt").value.trim();
+  const arquivo = $("imagem").files[0];
+  if (!api) return ($("status").textContent = "Cole o endereço da API primeiro.");
+  if (!prompt && !arquivo) return ($("status").textContent = "Escreva um prompt ou envie uma imagem.");
+  guardar("estudio-api", api);
+
+  $("gerar").disabled = true;
+  $("status").textContent = "Conectando…";
+  try {
+    const cliente = await Client.connect(api);
+    $("status").textContent = "Gerando… (a primeira vez demora porque baixa o modelo)";
+    const r = await cliente.predict("/gerar", [
+      prompt, preset, arquivo ? handle_file(arquivo) : null,
+      $("formato").value, Number($("segundos").value), 30, -1,
+    ]);
+    const saida = r.data[0];
+    const url = saida?.video?.url || saida?.url;
+    mostrar(url, `${preset} · ${prompt || "imagem"}`);
+    $("status").textContent = r.data[1] || "Pronto.";
+  } catch (e) {
+    $("status").textContent = "Erro: " + (e?.message || e);
+  } finally {
+    $("gerar").disabled = false;
+  }
+};
+</script>
+</body>
+</html>

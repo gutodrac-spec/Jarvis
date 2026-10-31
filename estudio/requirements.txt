@@ -1,0 +1,9 @@
+torch
+diffusers>=0.34
+transformers>=4.46
+accelerate
+bitsandbytes
+sentencepiece
+imageio
+imageio-ffmpeg
+gradio>=4.44
