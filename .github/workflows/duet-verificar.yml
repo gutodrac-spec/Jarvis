@@ -11,6 +11,8 @@ jobs:
   verificar:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      TEM_CC: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,9 +21,16 @@ jobs:
           cache: pip
           cache-dependency-path: duet/requirements.txt
       - run: pip install -r duet/requirements.txt
+      - name: Instalar Claude Code (só se houver token da assinatura)
+        if: env.TEM_CC == 'true'
+        run: npm install -g @anthropic-ai/claude-code
       - run: python duet/duet.py verificar
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          DUET_PROVEDOR: ${{ secrets.DUET_PROVEDOR }}
+          DUET_PROVEDOR_VERIFICACAO: ${{ secrets.DUET_PROVEDOR_VERIFICACAO }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GH_PAT: ${{ secrets.GH_PAT }}

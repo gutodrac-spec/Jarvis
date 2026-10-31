@@ -20,7 +20,8 @@ import telegram
 MINUTOS_OCIOSO = int(os.getenv("DUET_MINUTOS_OCIOSO", "15"))
 
 AJUDA = """Comandos:
-/status – integrações ativas
+/status – integrações e IA em uso
+/ia groq | claude-code | claude-api – troca a IA
 /verificar – faz a checagem agora
 /esquecer – apaga histórico e memória
 /dormir – desliga o servidor agora
@@ -41,7 +42,21 @@ def tratar(texto):
     if cmd == "/status":
         ativas = agente.integ.integracoes_ativas()
         linhas = [f"{'✅' if v else '⬜'} {k}" for k, v in ativas.items()]
-        return "\n".join(linhas) + f"\nModelo: {agente.MODELO_CHAT}", False
+        try:
+            prov = agente.provedores.escolher()
+            linhas.append(f"IA: {prov} ({agente.provedores.modelo(prov)})")
+        except Exception as e:
+            linhas.append(f"IA: {e}")
+        linhas.append("Disponíveis: " + (", ".join(agente.provedores.disponiveis()) or "nenhuma"))
+        return "\n".join(linhas), False
+    if cmd == "/ia":
+        partes = texto.split()
+        opcoes = agente.provedores.disponiveis()
+        if len(partes) < 2 or partes[1] not in opcoes:
+            return "Use: /ia " + " | /ia ".join(opcoes or ["(configure uma chave)"]), False
+        os.environ["DUET_PROVEDOR"] = partes[1]
+        agente.salvar_provedor(partes[1])
+        return f"Agora estou usando {partes[1]}.", False
     if cmd == "/verificar":
         return agente.verificar(janela_minutos=24 * 60) or "Nada importante nas últimas 24 h.", False
     if cmd == "/esquecer":
@@ -53,6 +68,9 @@ def tratar(texto):
 
 
 def bot():
+    import agente
+
+    agente.carregar_provedor()
     chat_ok = telegram.chat_autorizado()
     offset = None
     ultima_atividade = time.time()

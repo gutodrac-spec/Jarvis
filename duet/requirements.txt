@@ -2,3 +2,4 @@ anthropic>=0.40
 requests>=2.31
 google-api-python-client>=2.100
 google-auth>=2.23
+mcp>=1.2,<2  # a API do servidor mudou na versão 2

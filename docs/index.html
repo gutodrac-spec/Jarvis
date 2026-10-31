@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configurar Duet</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1d1c1a; --muted: #6b6862;
+    --line: #e2dfd8; --accent: #c4552d; --ok: #2f7d4f; --err: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161513; --card: #201f1c; --ink: #eceae4; --muted: #a29f97;
+            --line: #34322e; --accent: #e07a52; --ok: #5cbf86; --err: #f2867d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+            padding: 16px; margin-bottom: 16px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--muted); margin: 0 0 12px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin: 12px 0 4px; }
+  label:first-of-type { margin-top: 0; }
+  .dica { font-weight: 400; color: var(--muted); font-size: 13px; }
+  input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+                  border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .tem { color: var(--ok); font-size: 12px; font-weight: 600; margin-left: 6px; }
+  button { width: 100%; padding: 14px; border: 0; border-radius: 12px; background: var(--accent);
+           color: #fff; font: 600 16px system-ui, sans-serif; cursor: pointer; }
+  button.sec { background: transparent; color: var(--accent); border: 1px solid var(--accent);
+               margin-top: 12px; padding: 10px; font-size: 14px; }
+  button:disabled { opacity: .5; cursor: default; }
+  #log { margin-top: 16px; font: 13px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; }
+  .ok { color: var(--ok); } .err { color: var(--err); }
+  .aviso { font-size: 13px; color: var(--muted); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Configurar Duet</h1>
+  <p class="sub">Cole as chaves aqui. Elas vão criptografadas direto do seu navegador para os
+    segredos do GitHub (Actions e Codespaces). Esta página não guarda nada.</p>
+
+  <section>
+    <h2>1. GitHub</h2>
+    <label for="pat">Token clássico do GitHub
+      <span class="dica">— escopos: repo, codespace, notifications.
+      <a href="https://github.com/settings/tokens/new?scopes=repo,codespace,notifications&description=Duet" target="_blank" rel="noopener">Criar token</a></span></label>
+    <input id="pat" type="password" autocomplete="off" placeholder="ghp_...">
+    <label for="repo">Repositório</label>
+    <input id="repo" value="gutodrac-spec/Jarvis">
+    <button class="sec" id="conectar">Conectar e ver o que já está configurado</button>
+  </section>
+
+  <section>
+    <h2>2. Inteligência</h2>
+    <label for="DUET_PROVEDOR">IA principal</label>
+    <select id="DUET_PROVEDOR">
+      <option value="">Automático (assinatura › Groq › API)</option>
+      <option value="claude-code">Claude Code — usa sua assinatura Pro/Max</option>
+      <option value="groq">Groq</option>
+      <option value="claude-api">Claude API — cobrada por uso</option>
+    </select>
+    <label for="DUET_PROVEDOR_VERIFICACAO">IA da checagem de hora em hora
+      <span class="dica">— Groq tem camada grátis</span></label>
+    <select id="DUET_PROVEDOR_VERIFICACAO">
+      <option value="">Igual à principal</option>
+      <option value="claude-code">Claude Code</option>
+      <option value="groq">Groq</option>
+      <option value="claude-api">Claude API</option>
+    </select>
+    <label for="CLAUDE_CODE_OAUTH_TOKEN">Token da assinatura (Claude Code)
+      <span class="dica">— no seu computador: <code>claude setup-token</code></span></label>
+    <input id="CLAUDE_CODE_OAUTH_TOKEN" type="password" autocomplete="off" placeholder="sk-ant-oat...">
+    <label for="GROQ_API_KEY">Chave da Groq
+      <span class="dica">— <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a></span></label>
+    <input id="GROQ_API_KEY" type="password" autocomplete="off" placeholder="gsk_...">
+    <label for="ANTHROPIC_API_KEY">Chave da Claude API
+      <span class="dica">— <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a></span></label>
+    <input id="ANTHROPIC_API_KEY" type="password" autocomplete="off" placeholder="sk-ant-api...">
+  </section>
+
+  <section>
+    <h2>3. Telegram</h2>
+    <label for="TELEGRAM_TOKEN">Token do bot <span class="dica">— do @BotFather</span></label>
+    <input id="TELEGRAM_TOKEN" type="password" autocomplete="off" placeholder="123456:ABC...">
+    <label for="TELEGRAM_CHAT_ID">Seu chat id
+      <span class="dica">— mande "oi" ao bot e abra api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</span></label>
+    <input id="TELEGRAM_CHAT_ID" inputmode="numeric" placeholder="123456789">
+  </section>
+
+  <section>
+    <h2>4. Opcionais</h2>
+    <label for="VERCEL_TOKEN">Token da Vercel</label>
+    <input id="VERCEL_TOKEN" type="password" autocomplete="off">
+    <label for="GOOGLE_CLIENT_ID">Google client id <span class="dica">— Gmail e Drive, veja duet/google_setup.py</span></label>
+    <input id="GOOGLE_CLIENT_ID" autocomplete="off">
+    <label for="GOOGLE_CLIENT_SECRET">Google client secret</label>
+    <input id="GOOGLE_CLIENT_SECRET" type="password" autocomplete="off">
+    <label for="GOOGLE_REFRESH_TOKEN">Google refresh token</label>
+    <input id="GOOGLE_REFRESH_TOKEN" type="password" autocomplete="off">
+  </section>
+
+  <button id="salvar">Salvar no GitHub</button>
+  <p class="aviso">Campos vazios não mudam nada: o que já estava salvo continua. O token do GitHub
+    também é salvo como GH_PAT, porque o Duet precisa dele para ligar e desligar o Codespace.</p>
+  <div id="log" role="status" aria-live="polite"></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/libsodium@0.7.15/dist/modules/libsodium.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.15/dist/modules/libsodium-wrappers.js"></script>
+<script>
+const SEGREDOS = [
+  "DUET_PROVEDOR", "DUET_PROVEDOR_VERIFICACAO", "CLAUDE_CODE_OAUTH_TOKEN", "GROQ_API_KEY",
+  "ANTHROPIC_API_KEY", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID", "VERCEL_TOKEN",
+  "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN",
+];
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+function log(msg, cls) {
+  const linha = document.createElement("div");
+  if (cls) linha.className = cls;
+  linha.textContent = msg;
+  logEl.appendChild(linha);
+}
+
+async function gh(caminho, opcoes = {}) {
+  const r = await fetch("https://api.github.com" + caminho, {
+    ...opcoes,
+    headers: {
+      Authorization: "Bearer " + $("pat").value.trim(),
+      Accept: "application/vnd.github+json",
+      ...(opcoes.body ? { "Content-Type": "application/json" } : {}),
+    },
+  });
+  if (!r.ok) {
+    let det = "";
+    try { det = (await r.json()).message; } catch (e) {}
+    throw new Error(`${r.status} ${det || r.statusText} (${caminho})`);
+  }
+  return r.status === 204 || r.status === 201 ? null : r.json();
+}
+
+async function cifrar(valor, chavePublica) {
+  await sodium.ready;
+  const chave = sodium.from_base64(chavePublica, sodium.base64_variants.ORIGINAL);
+  const cifrado = sodium.crypto_box_seal(sodium.from_string(valor), chave);
+  return sodium.to_base64(cifrado, sodium.base64_variants.ORIGINAL);
+}
+
+function repo() { return $("repo").value.trim().replace(/^https:\/\/github.com\//, ""); }
+
+async function conectar(limpar = true) {
+  if (limpar) logEl.textContent = "";
+  if (!$("pat").value.trim()) { log("Cole o token do GitHub primeiro.", "err"); return null; }
+  const info = await gh(`/repos/${repo()}`);
+  const acoes = await gh(`/repos/${repo()}/actions/secrets?per_page=100`);
+  const existentes = new Set(acoes.secrets.map((s) => s.name));
+  document.querySelectorAll(".tem").forEach((e) => e.remove());
+  for (const nome of SEGREDOS) {
+    if (!existentes.has(nome)) continue;
+    const rotulo = document.querySelector(`label[for="${nome}"]`);
+    if (rotulo) rotulo.insertAdjacentHTML("beforeend", '<span class="tem">✓ já salvo</span>');
+  }
+  log(`Conectado a ${info.full_name}. ${existentes.size} segredo(s) já existem.`, "ok");
+  return info;
+}
+
+async function salvar() {
+  const botao = $("salvar");
+  botao.disabled = true;
+  try {
+    const info = await conectar();
+    if (!info) return;
+    log("Salvando...");
+    const valores = {};
+    for (const nome of SEGREDOS) {
+      const v = $(nome).value.trim();
+      if (v) valores[nome] = v;
+    }
+    valores.GH_PAT = $("pat").value.trim();
+
+    const chaveAcoes = await gh(`/repos/${repo()}/actions/secrets/public-key`);
+    let chaveCs = null;
+    try {
+      chaveCs = await gh(`/user/codespaces/secrets/public-key`);
+    } catch (e) {
+      log("Codespaces: sem permissão (o token precisa do escopo codespace). " + e.message, "err");
+    }
+
+    for (const [nome, valor] of Object.entries(valores)) {
+      try {
+        await gh(`/repos/${repo()}/actions/secrets/${nome}`, {
+          method: "PUT",
+          body: JSON.stringify({ encrypted_value: await cifrar(valor, chaveAcoes.key),
+                                 key_id: chaveAcoes.key_id }),
+        });
+        if (chaveCs) {
+          await gh(`/user/codespaces/secrets/${nome}`, {
+            method: "PUT",
+            body: JSON.stringify({ encrypted_value: await cifrar(valor, chaveCs.key),
+                                   key_id: chaveCs.key_id,
+                                   selected_repository_ids: [info.id] }),
+          });
+        }
+        log(`✓ ${nome}`, "ok");
+      } catch (e) {
+        log(`✗ ${nome}: ${e.message}`, "err");
+      }
+    }
+    SEGREDOS.forEach((n) => { if ($(n).tagName === "INPUT") $(n).value = ""; });
+    log("Pronto. Se o Codespace estiver ligado, desligue e ligue de novo (/dormir no Telegram) para ele ler as chaves novas.");
+    await conectar(false).catch(() => {});
+  } catch (e) {
+    log("Erro: " + e.message, "err");
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+$("conectar").addEventListener("click", () => conectar().catch((e) => log("Erro: " + e.message, "err")));
+$("salvar").addEventListener("click", salvar);
+</script>
+</body>
+</html>

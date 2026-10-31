@@ -1,22 +1,19 @@
-"""O cérebro do Duet: conversa com a Claude API e usa as integrações como ferramentas."""
+"""O cérebro do Duet: escolhe o provedor de IA e usa as integrações como ferramentas."""
 import datetime as dt
 import json
 import os
 import pathlib
 
-import anthropic
-
 import integracoes as integ
+import provedores
 
 # Estado fica no disco do Codespace (persiste quando ele é desligado).
 # NÃO fica no Git: o repositório é público e o histórico pode ter e-mails seus.
 PASTA_ESTADO = pathlib.Path(os.getenv("DUET_ESTADO", pathlib.Path.home() / ".duet"))
 ARQ_HISTORICO = PASTA_ESTADO / "historico.json"
 ARQ_MEMORIA = PASTA_ESTADO / "memoria.md"
+ARQ_SESSAO_CC = PASTA_ESTADO / "sessao_claude_code.txt"
 MAX_TURNOS_HISTORICO = 40
-
-MODELO_CHAT = os.getenv("DUET_MODELO", "claude-sonnet-5-5")
-MODELO_VERIFICACAO = os.getenv("DUET_MODELO_VERIFICACAO", "claude-haiku-5-5")
 
 FUSO = dt.timezone(dt.timedelta(hours=-3))  # America/Sao_Paulo
 
@@ -69,8 +66,26 @@ def lembrar(nota):
     return "ok, anotado"
 
 
+ARQ_PROVEDOR = PASTA_ESTADO / "provedor.txt"
+
+
+def salvar_provedor(nome):
+    _garantir_pasta()
+    ARQ_PROVEDOR.write_text(nome)
+
+
+def carregar_provedor():
+    """A escolha feita com /ia vale também depois de reiniciar."""
+    try:
+        nome = ARQ_PROVEDOR.read_text().strip()
+    except FileNotFoundError:
+        return
+    if nome in provedores.disponiveis():
+        os.environ["DUET_PROVEDOR"] = nome
+
+
 def esquecer_tudo():
-    for arq in (ARQ_HISTORICO, ARQ_MEMORIA):
+    for arq in (ARQ_HISTORICO, ARQ_MEMORIA, ARQ_SESSAO_CC):
         arq.unlink(missing_ok=True)
 
 
@@ -99,7 +114,7 @@ def definir_ferramentas():
     if ativas["github"]:
         defs.append(_ferramenta(
             "github_notificacoes", "Notificações do GitHub (PRs, issues, menções).",
-            {"desde_horas": {"type": "integer", "default": 24}}))
+            {"desde_horas": {"type": "integer"}}))
         funcs["github_notificacoes"] = lambda a: integ.github_notificacoes(a.get("desde_horas", 24))
         defs.append(_ferramenta(
             "github_repos_recentes", "Repositórios do Gustavo com push mais recente."))
@@ -112,14 +127,14 @@ def definir_ferramentas():
     if ativas["vercel"]:
         defs.append(_ferramenta(
             "vercel_deploys", "Últimos deploys da Vercel com estado (READY, ERROR, BUILDING...).",
-            {"limite": {"type": "integer", "default": 10}}))
+            {"limite": {"type": "integer"}}))
         funcs["vercel_deploys"] = lambda a: integ.vercel_deploys(a.get("limite", 10))
 
     if ativas["gmail"]:
         defs.append(_ferramenta(
             "gmail_buscar", "Busca e-mails com a sintaxe de busca do Gmail. "
             "Ex.: 'is:unread newer_than:1d', 'from:banco subject:boleto'.",
-            {"consulta": {"type": "string"}, "limite": {"type": "integer", "default": 15}},
+            {"consulta": {"type": "string"}, "limite": {"type": "integer"}},
             ["consulta"]))
         funcs["gmail_buscar"] = lambda a: integ.gmail_buscar(a["consulta"], a.get("limite", 15))
         defs.append(_ferramenta(
@@ -130,23 +145,25 @@ def definir_ferramentas():
     if ativas["drive"]:
         defs.append(_ferramenta(
             "drive_recentes", "Arquivos do Google Drive modificados recentemente.",
-            {"desde_horas": {"type": "integer", "default": 24}}))
+            {"desde_horas": {"type": "integer"}}))
         funcs["drive_recentes"] = lambda a: integ.drive_recentes(a.get("desde_horas", 24))
 
     return defs, funcs
 
 
-def _executar(funcs, nome, entrada):
+def executar(funcs, nome, entrada):
+    """Roda uma ferramenta. Devolve (texto, deu_erro); erro vira texto para a IA explicar."""
+    if nome not in funcs:
+        return f"Ferramenta desconhecida: {nome}", True
     try:
         resultado = funcs[nome](entrada or {})
         texto = json.dumps(resultado, ensure_ascii=False, default=str)
         return texto[:20000], False
-    except Exception as e:  # erro vira texto para o modelo explicar ao usuário
+    except Exception as e:
         return f"Erro ao executar {nome}: {e}", True
 
 
-# ------------------------------------------------------------------- laço
-def _sistema():
+def sistema():
     ativas = [k for k, v in integ.integracoes_ativas().items() if v] or ["nenhuma"]
     return SISTEMA.format(
         agora=dt.datetime.now(FUSO).strftime("%d/%m/%Y %H:%M"),
@@ -155,35 +172,43 @@ def _sistema():
     )
 
 
-def rodar(mensagens, modelo=MODELO_CHAT, max_passos=8, cliente=None):
-    """Roda o laço de ferramentas e devolve o texto final."""
-    cliente = cliente or anthropic.Anthropic()
+# ------------------------------------------------------------------- laço
+def rodar(mensagens, para="conversa", cliente=None, sessao_cc=None):
+    """Roda o provedor escolhido. Devolve (texto, id_sessao_claude_code_ou_None)."""
+    prov = provedores.escolher(para)
+    mod = provedores.modelo(prov, para)
+    if prov == "claude-code":
+        # O Claude Code guarda o próprio histórico; mandamos só a última mensagem.
+        texto = mensagens[-1]["content"]
+        try:
+            return provedores.claude_code(texto, sistema(), mod, sessao=sessao_cc)
+        except RuntimeError:
+            if not sessao_cc:
+                raise
+            return provedores.claude_code(texto, sistema(), mod)  # sessão expirou: começa outra
     defs, funcs = definir_ferramentas()
-    msgs = list(mensagens)
-    for _ in range(max_passos):
-        resp = cliente.messages.create(
-            model=modelo, max_tokens=2000, system=_sistema(), tools=defs, messages=msgs
-        )
-        if resp.stop_reason != "tool_use":
-            return "".join(b.text for b in resp.content if b.type == "text").strip()
-        msgs.append({"role": "assistant", "content": resp.content})
-        resultados = []
-        for bloco in resp.content:
-            if bloco.type == "tool_use":
-                texto, erro = _executar(funcs, bloco.name, bloco.input)
-                resultados.append({
-                    "type": "tool_result", "tool_use_id": bloco.id,
-                    "content": texto, "is_error": erro,
-                })
-        msgs.append({"role": "user", "content": resultados})
-    return "Parei porque a tarefa ficou longa demais. Pode detalhar o que precisa?"
+    exe = lambda nome, entrada: executar(funcs, nome, entrada)
+    if prov == "groq":
+        return provedores.groq(mensagens, sistema(), defs, exe, mod), None
+    return provedores.claude_api(mensagens, sistema(), defs, exe, mod, cliente=cliente), None
+
+
+def _sessao_cc():
+    try:
+        return ARQ_SESSAO_CC.read_text().strip() or None
+    except FileNotFoundError:
+        return None
 
 
 def conversar(texto_usuario, cliente=None):
     """Uma mensagem do Gustavo -> resposta, mantendo o histórico."""
     historico = carregar_historico()
     historico.append({"role": "user", "content": texto_usuario})
-    resposta = rodar(historico, cliente=cliente) or "(sem resposta)"
+    resposta, sessao = rodar(historico, cliente=cliente, sessao_cc=_sessao_cc())
+    resposta = resposta or "(sem resposta)"
+    if sessao:
+        _garantir_pasta()
+        ARQ_SESSAO_CC.write_text(sessao)
     historico.append({"role": "assistant", "content": resposta})
     salvar_historico(historico)
     return resposta
@@ -199,9 +224,9 @@ Se não houver nada importante, responda exatamente: NADA"""
 
 def verificar(janela_minutos=65, cliente=None):
     """Checagem proativa. Devolve o aviso, ou None se não há nada importante."""
-    texto = rodar(
+    texto, _ = rodar(
         [{"role": "user", "content": PEDIDO_VERIFICACAO.format(janela=janela_minutos)}],
-        modelo=MODELO_VERIFICACAO,
+        para="verificacao",
         cliente=cliente,
     )
     if not texto or texto.strip().upper().startswith("NADA"):
