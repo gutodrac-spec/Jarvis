@@ -1,0 +1,16 @@
+{
+  "name": "duet",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install --user -r duet/requirements.txt",
+  "postStartCommand": "bash duet/iniciar.sh",
+  "secrets": {
+    "ANTHROPIC_API_KEY": { "description": "Chave da Claude API (console.anthropic.com)" },
+    "TELEGRAM_TOKEN": { "description": "Token do bot criado no @BotFather" },
+    "TELEGRAM_CHAT_ID": { "description": "Seu chat id no Telegram (o bot só responde a ele)" },
+    "GH_PAT": { "description": "Token clássico do GitHub com escopos codespace, repo e notifications" },
+    "VERCEL_TOKEN": { "description": "Opcional: token da Vercel" },
+    "GOOGLE_CLIENT_ID": { "description": "Opcional: para Gmail e Drive" },
+    "GOOGLE_CLIENT_SECRET": { "description": "Opcional: para Gmail e Drive" },
+    "GOOGLE_REFRESH_TOKEN": { "description": "Opcional: gerado com duet/google_setup.py" }
+  }
+}
