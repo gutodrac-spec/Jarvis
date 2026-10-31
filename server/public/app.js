@@ -17,7 +17,7 @@ let ringer = null;
 
 // ---------------- UI helpers ----------------
 function show(id) {
-  ["setup", "home", "incoming", "incall"].forEach((s) => $(s).classList.toggle("hidden", s !== id));
+  ["setup", "home", "settings", "incoming", "incall"].forEach((s) => $(s).classList.toggle("hidden", s !== id));
 }
 function log(text, who = "jarvis") {
   const el = document.createElement("div");
@@ -120,6 +120,7 @@ function stopRinging() {
 
 function acceptCall() {
   stopRinging();
+  unlockAudio();
   send({ type: "call_accepted", callId: currentCall && currentCall.id });
   enterCall(currentCall ? currentCall.reason : "");
 }
@@ -147,6 +148,8 @@ function hangup() {
   clearInterval(timerId);
   stopListening();
   speechSynthesis.cancel();
+  audioQueue = [];
+  player.pause();
   send({ type: "hangup", callId: currentCall && currentCall.id });
   currentCall = null;
   show("home");
@@ -157,16 +160,78 @@ let voices = [];
 const loadVoices = () => (voices = speechSynthesis.getVoices());
 if ("speechSynthesis" in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
 
+// Voz: ElevenLabs (realista, estilo Jarvis) quando configurada; senão a voz do navegador
+const player = new Audio();
+player.preload = "auto";
+let audioQueue = [];
+let playing = false;
+
+// 0,1 s de silêncio em WAV (usado só para liberar o áudio no celular)
+const SILENCE = (() => {
+  const n = 800, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const w = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+  v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true);
+  for (let k = 0; k < n; k++) v.setUint8(44 + k, 128);
+  return "data:audio/wav;base64," + btoa(String.fromCharCode(...new Uint8Array(buf)));
+})();
+
+function unlockAudio() {
+  // celulares só tocam áudio depois de um toque: tocamos um silêncio no clique de atender
+  player.src = SILENCE;
+  player.play().catch(() => {});
+}
+
 function speak(text) {
-  if (!("speechSynthesis" in window) || !text) return;
+  if (!text) return;
+  if (cfg && cfg.ELEVENLABS_API_KEY && cfg.ELEVENLABS_API_KEY.set) {
+    audioQueue.push(text);
+    if (!playing) playNext();
+  } else {
+    speakBrowser(text);
+  }
+}
+
+async function playNext() {
+  const text = audioQueue.shift();
+  if (!text) { playing = false; talking(false); return; }
+  playing = true;
+  try {
+    const r = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-jarvis-token": token },
+      body: JSON.stringify({ text }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+    const url = URL.createObjectURL(await r.blob());
+    player.src = url;
+    talking(true);
+    await player.play();
+    await new Promise((res) => { player.onended = res; player.onerror = res; });
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    log("Voz ElevenLabs falhou (" + e.message + "), usando voz do navegador.", "sys");
+    speakBrowser(text);
+  }
+  playNext();
+}
+
+function talking(on) {
+  $("talkOrb").classList.toggle("talking", on);
+  pauseListening(on);
+}
+
+function speakBrowser(text) {
+  if (!("speechSynthesis" in window)) return;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "pt-BR";
   const v = voices.find((x) => x.lang === "pt-BR" && /male|daniel|antonio|ricardo/i.test(x.name)) ||
             voices.find((x) => x.lang && x.lang.startsWith("pt"));
   if (v) u.voice = v;
   u.rate = 1.05;
-  u.onstart = () => { $("talkOrb").classList.add("talking"); pauseListening(true); };
-  u.onend = () => { $("talkOrb").classList.remove("talking"); pauseListening(false); };
+  u.onstart = () => talking(true);
+  u.onend = () => talking(false);
   speechSynthesis.speak(u);
 }
 
@@ -268,7 +333,7 @@ $("toggleStream").onclick = () => {
   $("toggleStream").textContent = streaming ? "🙈 Parar tela" : "👁️ Ver tela";
   if (!streaming) { $("screenImg").removeAttribute("src"); $("screenEmpty").classList.remove("hidden"); }
 };
-$("callNow").onclick = () => { currentCall = null; send({ type: "user_call" }); enterCall("Pois não, senhor?"); };
+$("callNow").onclick = () => { unlockAudio(); currentCall = null; send({ type: "user_call" }); enterCall("Pois não, senhor?"); };
 $("stopTask").onclick = () => { send({ type: "stop" }); log("Pedido de parada enviado.", "sys"); };
 $("chatForm").onsubmit = (e) => {
   e.preventDefault();
@@ -310,10 +375,116 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// ---------------- Configurações ----------------
+let cfg = null;
+const api = (path, opts = {}) =>
+  fetch(path, {
+    ...opts,
+    headers: { "content-type": "application/json", "x-jarvis-token": token, ...(opts.headers || {}) },
+  }).then(async (r) => {
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `erro ${r.status}`);
+    return j;
+  });
+const PLAIN = ["CLAUDE_BACKEND", "GROQ_FAST_MODEL", "GROQ_SMART_MODEL", "GROQ_VISION_MODEL", "ELEVENLABS_VOICE_ID",
+  "ELEVENLABS_MODEL", "WATCH_RULES", "CALL_MIN_URGENCY"];
+
+async function loadConfig() {
+  try { cfg = await api("/api/config"); } catch { return; }
+  for (const k of PLAIN) if ($(k)) $(k).value = cfg[k] || "";
+  $("MONITOR_ENABLED").checked = cfg.MONITOR_ENABLED === "1";
+  document.querySelectorAll("[data-secret]").forEach((el) => {
+    const v = cfg[el.dataset.secret];
+    el.value = "";
+    el.dataset.ph = el.dataset.ph || el.placeholder;
+    el.placeholder = v && v.set ? `✅ configurada (${v.preview}) — digite para trocar` : el.dataset.ph;
+  });
+  const sub = cfg.CLAUDE_CODE_OAUTH_TOKEN && cfg.CLAUDE_CODE_OAUTH_TOKEN.set;
+  $("claudeStatus").innerHTML = sub
+    ? '<span class="ok">✅ Assinatura Claude conectada</span>'
+    : "Assinatura não conectada. Toque no botão para fazer login.";
+  $("claudeLogin").textContent = sub ? "Reconectar assinatura" : "Conectar minha assinatura Claude";
+  $("claudeLogout").classList.toggle("hidden", !sub);
+}
+
+$("openSettings").onclick = () => { loadConfig(); show("settings"); };
+$("closeSettings").onclick = () => show("home");
+
+$("saveSettings").onclick = async () => {
+  const patch = {};
+  for (const k of PLAIN) if ($(k)) patch[k] = $(k).value.trim();
+  patch.MONITOR_ENABLED = $("MONITOR_ENABLED").checked ? "1" : "0";
+  document.querySelectorAll("[data-secret]").forEach((el) => { if (el.value.trim()) patch[el.dataset.secret] = el.value.trim(); });
+  try {
+    await api("/api/config", { method: "POST", body: JSON.stringify(patch) });
+    await loadConfig();
+    $("saveMsg").textContent = "✅ Salvo e enviado ao PC.";
+  } catch (e) {
+    $("saveMsg").textContent = "❌ " + e.message;
+  }
+};
+
+$("claudeLogin").onclick = async () => {
+  $("claudeLogin").disabled = true;
+  $("claudeStatus").textContent = "Gerando link de login…";
+  try {
+    const { url } = await api("/api/claude/login/start", { method: "POST" });
+    $("claudeUrl").href = url;
+    $("claudeFlow").classList.remove("hidden");
+    $("claudeStatus").textContent = "Abra o link, faça login e cole o código abaixo.";
+  } catch (e) {
+    $("claudeStatus").textContent = "❌ " + e.message;
+  }
+  $("claudeLogin").disabled = false;
+};
+$("claudeSend").onclick = async () => {
+  const code = $("claudeCode").value.trim();
+  if (!code) return;
+  $("claudeSend").disabled = true;
+  $("claudeStatus").textContent = "Confirmando…";
+  try {
+    await api("/api/claude/login/code", { method: "POST", body: JSON.stringify({ code }) });
+    $("claudeFlow").classList.add("hidden");
+    $("claudeCode").value = "";
+    await loadConfig();
+  } catch (e) {
+    $("claudeStatus").textContent = "❌ " + e.message;
+  }
+  $("claudeSend").disabled = false;
+};
+$("claudeLogout").onclick = async () => { await api("/api/claude/logout", { method: "POST" }); loadConfig(); };
+
+$("loadVoices").onclick = async () => {
+  try {
+    const list = await api("/api/voices");
+    const sel = $("voiceSelect");
+    sel.innerHTML = list.map((v) => `<option value="${v.id}">${v.name}${v.desc ? " — " + v.desc : ""}</option>`).join("");
+    const cur = $("ELEVENLABS_VOICE_ID").value;
+    if (list.some((v) => v.id === cur)) sel.value = cur;
+    else sel.insertAdjacentHTML("afterbegin", `<option value="${cur}" selected>(atual) ${cur}</option>`);
+  } catch (e) {
+    $("saveMsg").textContent = "❌ " + e.message + " (salve a chave primeiro)";
+  }
+};
+$("voiceSelect").onchange = () => { $("ELEVENLABS_VOICE_ID").value = $("voiceSelect").value; };
+$("testVoice").onclick = async () => {
+  unlockAudio();
+  await $("saveSettings").onclick();
+  speak("Às suas ordens, senhor. Todos os sistemas estão operacionais.");
+};
+
 function boot() {
+  // link do Codespace: https://…/#token=XXXX já entra logado
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("token")) {
+    token = h.get("token");
+    store.set("jarvis_token", token);
+    history.replaceState(null, "", location.pathname + location.search);
+  }
   if (!token) return show("setup");
   show("home");
   applyParsec();
+  loadConfig();
   connect();
   checkPush();
   // aberto a partir da notificação

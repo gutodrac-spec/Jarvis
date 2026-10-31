@@ -4,3 +4,4 @@ agent/.env
 agent/.venv/
 __pycache__/
 *.pyc
+JARVIS-LINK.txt

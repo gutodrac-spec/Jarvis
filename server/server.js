@@ -10,6 +10,9 @@ const crypto = require("crypto");
 const express = require("express");
 const webpush = require("web-push");
 const { WebSocketServer } = require("ws");
+const { Config } = require("./config");
+const voice = require("./voice");
+const claudeLogin = require("./claude-login");
 
 const PORT = Number(process.env.PORT || 8787);
 const TOKEN = process.env.JARVIS_TOKEN || "";
@@ -34,6 +37,8 @@ if (fs.existsSync(VAPID_FILE)) {
   fs.writeFileSync(VAPID_FILE, JSON.stringify(vapid, null, 2));
 }
 webpush.setVapidDetails(CONTACT, vapid.publicKey, vapid.privateKey);
+
+const config = new Config(DATA_DIR);
 
 // ---------- Assinaturas de push ----------
 let subs = fs.existsSync(SUBS_FILE) ? JSON.parse(fs.readFileSync(SUBS_FILE, "utf8")) : [];
@@ -87,6 +92,46 @@ app.get("/api/status", auth, (_req, res) =>
   res.json({ agentOnline: agents.size > 0, clients: clients.size, call: currentCall })
 );
 
+// ---------- Configurações (chaves de API etc. pela interface) ----------
+app.get("/api/config", auth, (_req, res) => res.json(config.public()));
+app.post("/api/config", auth, (req, res) => {
+  config.update(req.body);
+  broadcast(agents, { type: "config", config: config.agent() });
+  res.json(config.public());
+});
+
+// ---------- Voz (ElevenLabs) ----------
+app.post("/api/tts", auth, (req, res) =>
+  voice.tts(config, req.body?.text || "", res).catch((e) => res.status(500).json({ error: e.message }))
+);
+app.get("/api/voices", auth, (_req, res) =>
+  voice.voices(config).then((v) => res.json(v)).catch((e) => res.status(400).json({ error: e.message }))
+);
+
+// ---------- Login da assinatura Claude pelo site ----------
+app.post("/api/claude/login/start", auth, async (_req, res) => {
+  try {
+    res.json({ url: await claudeLogin.start() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post("/api/claude/login/code", auth, async (req, res) => {
+  try {
+    const token = await claudeLogin.submitCode(req.body?.code || "");
+    config.update({ CLAUDE_CODE_OAUTH_TOKEN: token, CLAUDE_BACKEND: "cli" });
+    broadcast(agents, { type: "config", config: config.agent() });
+    res.json({ ok: true, config: config.public() });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+app.post("/api/claude/logout", auth, (_req, res) => {
+  config.update({ CLAUDE_CODE_OAUTH_TOKEN: null });
+  broadcast(agents, { type: "config", config: config.agent() });
+  res.json(config.public());
+});
+
 // Permite disparar uma chamada de teste (ou de outro sistema seu)
 app.post("/api/call", auth, async (req, res) => {
   const call = startCall(req.body?.reason || "Chamada de teste", req.body?.urgency || "normal");
@@ -131,6 +176,7 @@ wss.on("connection", (ws, req) => {
   if (role === "client") {
     ws.send(JSON.stringify({ type: "hello", agentOnline: agents.size > 0, call: currentCall }));
   } else {
+    ws.send(JSON.stringify({ type: "config", config: config.agent() }));
     broadcast(clients, { type: "agent_status", online: true });
   }
 

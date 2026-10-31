@@ -16,6 +16,32 @@ Ele mexe no **mouse e no teclado** para fazer isso.
                                                                                         - Claude: tarefas complexas
 ```
 
+## 🚀 Rodar pelo celular (GitHub Codespaces)
+
+1. No celular, abra: **https://codespaces.new/gutodrac-spec/Jarvis?ref=claude/jarvis-remote-pc-control-62rxeb**
+   e toque em **Create codespace**. A primeira vez leva uns 3 a 5 minutos, porque ele instala tudo sozinho.
+2. Quando abrir, aparece o arquivo **`JARVIS-LINK.txt`**. Toque no primeiro link (`https://…-8787.app.github.dev/#token=…`):
+   ele já entra no app com o token.
+3. No app, toque em **⚙️**:
+   - **Conectar minha assinatura Claude**: o site gera o link de login do Claude. Abra, faça login, copie o código e cole no site.
+   - Cole as chaves do **Groq** e da **ElevenLabs** e toque em **Salvar**. Elas vão direto para o agente.
+   - Em **Voz**, use **Carregar minhas vozes** e **Testar voz**.
+4. Ative as notificações e use **Testar chamada**.
+
+No Codespace, o agente controla um **desktop virtual** (link 🖥️ no `JARVIS-LINK.txt`, senha `jarvis`).
+Assim dá para ver o Jarvis mexendo no mouse e no teclado pelo próprio celular. Para ele controlar o **seu PC**,
+rode o agente no PC com o `JARVIS_SERVER` e o `JARVIS_TOKEN` que aparecem no `JARVIS-LINK.txt`.
+
+> O Codespace desliga sozinho depois de uns 30 minutos sem uso, e o link muda se você criar outro Codespace.
+> Para deixar ligado o tempo todo, rode o `server/` numa VPS ou no próprio PC.
+
+## 🔊 Voz do Jarvis (ElevenLabs)
+
+A voz padrão é a **Daniel** (`onwK4e9ZLuTAKqWW03F9`): masculina, britânica, grave e elegante, bem no estilo Jarvis.
+Para ficar ainda mais parecida, procure "Jarvis" ou "British butler" na *Voice Library* da ElevenLabs, adicione a voz
+à sua conta e escolha em ⚙️ → Voz. O modelo `eleven_flash_v2_5` é o mais rápido para conversa. O `eleven_multilingual_v2`
+soa mais natural, mas demora mais. Sem a chave da ElevenLabs, o app usa a voz do navegador.
+
 ## Sobre o Parsec
 
 O Parsec **não tem API** para que outro programa mova o mouse ou digite por ele. Por isso o Jarvis
@@ -62,7 +88,8 @@ cd agent
 python -m venv .venv && .venv\Scripts\activate      # Linux/Mac: source .venv/bin/activate
 pip install -r requirements.txt
 copy .env.example .env                              # Linux/Mac: cp .env.example .env
-# edite o .env: JARVIS_SERVER, JARVIS_TOKEN, GROQ_API_KEY ...
+# edite o .env: só JARVIS_SERVER e JARVIS_TOKEN são obrigatórios.
+# As chaves (Groq, Claude, ElevenLabs) podem ser colocadas pelo app em ⚙️ e chegam aqui sozinhas.
 python jarvis_agent.py
 ```
 
@@ -73,7 +100,7 @@ python jarvis_agent.py
 
 | `CLAUDE_BACKEND` | Como funciona | O que precisa |
 |---|---|---|
-| `cli` (padrão) | Usa o **Claude Code** com a sua **assinatura** Pro/Max. Ele vê a tela e controla o PC pelo `pc_cli.py` (screenshot → Read → click/type). | `npm i -g @anthropic-ai/claude-code` e depois `claude login` |
+| `cli` (padrão) | Usa o **Claude Code** com a sua **assinatura** Pro/Max. Ele vê a tela e controla o PC pelo `pc_cli.py` (screenshot → Read → click/type). | `npm i -g @anthropic-ai/claude-code` no PC. Para o login, toque em **⚙️ → Conectar minha assinatura Claude** no app (gera um token de 1 ano, que é enviado ao agente), ou rode `claude login` no PC |
 | `api` | Usa a API da Anthropic com **computer use** (`computer_toolset_20260801`, modelo `claude-opus-5-5`). É mais preciso para cliques e cobra por uso. | `ANTHROPIC_API_KEY` |
 
 No modo `api`, o *fallback* automático do servidor (`fallbacks: "default"`) fica ligado: se o modelo
@@ -109,6 +136,10 @@ recusar um pedido, a Anthropic tenta outro modelo. Para desligar, remova `fallba
 
 ```
 server/server.js          servidor: Web Push, WebSocket, API /api/call (teste)
+server/config.js          chaves e configurações editáveis pela interface (data/config.json)
+server/voice.js           voz ElevenLabs (/api/tts, /api/voices)
+server/claude-login.js    login da assinatura Claude pelo site (claude setup-token)
+.devcontainer/            Codespaces: instala tudo, sobe servidor + agente e gera o JARVIS-LINK.txt
 server/public/            app web: index.html, app.js, sw.js (notificação de chamada), style.css
 agent/jarvis_agent.py     agente principal: conexão, vigia da tela, pedidos, tela ao vivo
 agent/brain.py            Groq: roteador rápido, visão ("o que tem na tela"), análise de alertas

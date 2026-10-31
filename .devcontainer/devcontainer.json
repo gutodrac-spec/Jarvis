@@ -1,0 +1,21 @@
+{
+  "name": "Jarvis",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/desktop-lite:1": { "password": "jarvis", "webPort": "6080" }
+  },
+  "containerEnv": { "DISPLAY": ":1" },
+  "forwardPorts": [8787, 6080],
+  "portsAttributes": {
+    "8787": { "label": "Jarvis (app)", "onAutoForward": "notify" },
+    "6080": { "label": "Desktop virtual (senha: jarvis)", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash .devcontainer/start.sh",
+  "postAttachCommand": "cat JARVIS-LINK.txt 2>/dev/null || true",
+  "customizations": {
+    "codespaces": { "openFiles": ["JARVIS-LINK.txt"] }
+  }
+}

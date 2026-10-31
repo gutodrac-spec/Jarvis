@@ -26,7 +26,10 @@
   <section id="home" class="screen hidden">
     <header>
       <div class="brand"><div class="orb tiny"></div><span>J.A.R.V.I.S.</span></div>
-      <span id="agentDot" class="dot off" title="PC"></span>
+      <div class="hdr-right">
+        <span id="agentDot" class="dot off" title="PC"></span>
+        <button id="openSettings" class="btn small">⚙️</button>
+      </div>
     </header>
 
     <div id="notifBanner" class="banner hidden">
@@ -51,13 +54,94 @@
       <input id="chatInput" placeholder="Peça algo ao Jarvis…" autocomplete="off" />
       <button class="btn primary" type="submit">Enviar</button>
     </form>
-    <details class="settings">
-      <summary>Configurações</summary>
+  </section>
+
+
+  <!-- Configurações -->
+  <section id="settings" class="screen hidden">
+    <header>
+      <button id="closeSettings" class="btn small">← Voltar</button>
+      <span class="brand">Configurações</span>
+      <span></span>
+    </header>
+
+    <div class="panel">
+      <h3>🧠 Claude</h3>
+      <div id="claudeStatus" class="muted">…</div>
+      <div class="row">
+        <button id="claudeLogin" class="btn primary">Conectar minha assinatura Claude</button>
+        <button id="claudeLogout" class="btn small danger hidden">Desconectar</button>
+      </div>
+      <div id="claudeFlow" class="hidden flow">
+        <p>1. Abra o link e faça login na sua conta Claude:</p>
+        <a id="claudeUrl" class="btn" target="_blank" rel="noopener">🔗 Abrir login do Claude</a>
+        <p>2. Copie o código que aparecer e cole aqui:</p>
+        <input id="claudeCode" placeholder="Cole o código aqui" autocomplete="off" />
+        <button id="claudeSend" class="btn primary">Confirmar código</button>
+      </div>
+      <label>Usar para tarefas complexas
+        <select id="CLAUDE_BACKEND">
+          <option value="cli">Assinatura (Claude Code)</option>
+          <option value="api">API da Anthropic (computer use)</option>
+        </select>
+      </label>
+      <label>Chave da API Anthropic (opcional) <input data-secret="ANTHROPIC_API_KEY" type="password" placeholder="sk-ant-…" /></label>
+    </div>
+
+    <div class="panel">
+      <h3>⚡ Groq</h3>
+      <label>Chave do Groq <input data-secret="GROQ_API_KEY" type="password" placeholder="gsk_…" /></label>
+      <label>Modelo rápido <input id="GROQ_FAST_MODEL" /></label>
+      <label>Modelo esperto <input id="GROQ_SMART_MODEL" /></label>
+      <label>Modelo de visão (vigia a tela) <input id="GROQ_VISION_MODEL" /></label>
+    </div>
+
+    <div class="panel">
+      <h3>🔊 Voz (ElevenLabs)</h3>
+      <label>Chave da ElevenLabs <input data-secret="ELEVENLABS_API_KEY" type="password" placeholder="sk_…" /></label>
+      <label>Voz
+        <select id="voiceSelect"><option value="">— carregue as vozes —</option></select>
+      </label>
+      <label>ID da voz <input id="ELEVENLABS_VOICE_ID" /></label>
+      <label>Modelo
+        <select id="ELEVENLABS_MODEL">
+          <option value="eleven_flash_v2_5">Flash v2.5 (mais rápido)</option>
+          <option value="eleven_turbo_v2_5">Turbo v2.5</option>
+          <option value="eleven_multilingual_v2">Multilingual v2 (mais natural)</option>
+          <option value="eleven_v3">v3 (mais expressivo)</option>
+        </select>
+      </label>
+      <div class="row">
+        <button id="loadVoices" class="btn small">Carregar minhas vozes</button>
+        <button id="testVoice" class="btn small">▶️ Testar voz</button>
+      </div>
+      <p class="muted small">Dica: na Voice Library da ElevenLabs, procure "Jarvis" ou "British butler", adicione à sua conta e carregue aqui.</p>
+    </div>
+
+    <div class="panel">
+      <h3>👁️ Vigilância</h3>
+      <label><input type="checkbox" id="MONITOR_ENABLED" /> Vigiar a tela e me ligar sozinho</label>
+      <label>Quando me ligar <textarea id="WATCH_RULES" rows="4"></textarea></label>
+      <label>Urgência mínima para ligar
+        <select id="CALL_MIN_URGENCY">
+          <option value="baixa">Baixa</option><option value="normal">Normal</option>
+          <option value="alta">Alta</option><option value="critica">Crítica</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="panel">
+      <h3>📱 Este aparelho</h3>
+      <label><input type="checkbox" id="voiceToggle" checked /> Jarvis fala em voz alta fora da chamada</label>
       <label>Link do Parsec (opcional)<input id="parsecInput" placeholder="https://parsec.app/…" /></label>
-      <label><input type="checkbox" id="voiceToggle" checked /> Jarvis fala em voz alta</label>
-      <button id="testCall" class="btn small">Testar chamada</button>
-      <button id="logout" class="btn small danger">Trocar token</button>
-    </details>
+      <div class="row">
+        <button id="testCall" class="btn small">📞 Testar chamada</button>
+        <button id="logout" class="btn small danger">Trocar token</button>
+      </div>
+    </div>
+
+    <button id="saveSettings" class="btn primary">💾 Salvar</button>
+    <p id="saveMsg" class="muted"></p>
   </section>
 
   <!-- Chamada recebida -->

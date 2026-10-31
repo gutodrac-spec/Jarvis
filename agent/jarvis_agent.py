@@ -33,15 +33,26 @@ import pc  # noqa: E402
 
 SERVER = os.getenv("JARVIS_SERVER", "ws://localhost:8787/ws")
 TOKEN = os.environ.get("JARVIS_TOKEN", "")
-MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "1") == "1"
 MONITOR_INTERVAL = float(os.getenv("MONITOR_INTERVAL", "20"))
 MONITOR_FORCE_EVERY = float(os.getenv("MONITOR_FORCE_EVERY", "300"))
 ALERT_COOLDOWN = float(os.getenv("ALERT_COOLDOWN", "900"))
-WATCH_RULES = os.getenv("WATCH_RULES", "Me ligue se aparecer erro, travamento ou algo que precise da minha atenção.")
 STREAM_FPS = float(os.getenv("STREAM_FPS", "1.5"))
 STREAM_WIDTH = int(os.getenv("STREAM_WIDTH", "1100"))
 URGENCY = ["baixa", "normal", "alta", "critica"]
-CALL_MIN = URGENCY.index(os.getenv("CALL_MIN_URGENCY", "normal")) if os.getenv("CALL_MIN_URGENCY", "normal") in URGENCY else 1
+
+
+# Estes valores podem mudar a qualquer momento pela interface (mensagem "config")
+def monitor_enabled() -> bool:
+    return os.getenv("MONITOR_ENABLED", "1") == "1"
+
+
+def watch_rules() -> str:
+    return os.getenv("WATCH_RULES") or "Me ligue se aparecer erro, travamento ou algo que precise da minha atenção."
+
+
+def call_min() -> int:
+    u = os.getenv("CALL_MIN_URGENCY", "normal")
+    return URGENCY.index(u) if u in URGENCY else 1
 
 
 class Jarvis:
@@ -123,6 +134,12 @@ class Jarvis:
             self.streaming = bool(m.get("on"))
         elif t == "stop":
             self.stop_task()
+        elif t == "config":
+            # só aplica o que foi preenchido no app; o que estiver vazio continua vindo do .env local
+            for k, v in (m.get("config") or {}).items():
+                if v:
+                    os.environ[k] = str(v)
+            print("Configuração recebida do servidor:", ", ".join(k for k, v in m["config"].items() if v))
 
     # ------------------------------------------------------------ pedidos do usuário
     def context(self) -> str:
@@ -211,15 +228,12 @@ class Jarvis:
 
     # ------------------------------------------------------------ vigilância da tela
     def monitor_loop(self):
-        if not MONITOR_ENABLED:
-            return
-        if not os.getenv("GROQ_API_KEY"):
-            print("GROQ_API_KEY ausente: monitoramento desligado.")
-            return
         prev = None
         last_check = 0.0
         while True:
             time.sleep(MONITOR_INTERVAL)
+            if not monitor_enabled() or not os.getenv("GROQ_API_KEY"):
+                continue
             if self.busy() or not self.ws:
                 continue  # durante uma tarefa a tela muda de propósito
             try:
@@ -230,7 +244,7 @@ class Jarvis:
                 prev = full
                 last_check = time.time()
                 img, _ = pc.fit(full, 1024)
-                r = brain.analyze_screen(pc.to_b64(img, 70), WATCH_RULES, self.context())
+                r = brain.analyze_screen(pc.to_b64(img, 70), watch_rules(), self.context())
                 if not r.get("alert"):
                     continue
                 key = (r.get("key") or r.get("reason", ""))[:60].lower()
@@ -241,7 +255,7 @@ class Jarvis:
                 reason = r.get("reason") or "Algo na tela precisa da sua atenção."
                 self.last_alert = {"reason": reason, "summary": r.get("summary", ""), "ts": time.time()}
                 level = URGENCY.index(urg) if urg in URGENCY else 1
-                if level >= CALL_MIN:
+                if level >= call_min():
                     self.call(reason, urg)
                 else:
                     self.notify("Jarvis", reason)

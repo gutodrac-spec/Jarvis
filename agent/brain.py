@@ -12,17 +12,30 @@ import re
 
 from groq import Groq
 
-FAST = os.getenv("GROQ_FAST_MODEL", "llama-3.1-8b-instant")
-SMART = os.getenv("GROQ_SMART_MODEL", "llama-3.3-70b-versatile")
-VISION = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+def FAST():
+    return os.getenv("GROQ_FAST_MODEL") or "llama-3.1-8b-instant"
+
+
+def SMART():
+    return os.getenv("GROQ_SMART_MODEL") or "llama-3.3-70b-versatile"
+
+
+def VISION():
+    return os.getenv("GROQ_VISION_MODEL") or "meta-llama/llama-4-scout-17b-16e-instruct"
+
 
 _client: Groq | None = None
+_client_key = ""
 
 
 def client() -> Groq:
-    global _client
-    if _client is None:
-        _client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    """Recria o cliente se a chave mudar (ela pode ser trocada pela interface)."""
+    global _client, _client_key
+    key = os.getenv("GROQ_API_KEY", "")
+    if not key:
+        raise RuntimeError("Chave do Groq não configurada. Coloque em Configurações no app.")
+    if _client is None or key != _client_key:
+        _client, _client_key = Groq(api_key=key), key
     return _client
 
 
@@ -73,7 +86,7 @@ def route(history: list[dict], text: str, context: str = "") -> dict:
     msgs += history[-12:]
     msgs.append({"role": "user", "content": text})
     last: Exception | None = None
-    for model in (SMART, FAST):  # 70B é rápido no Groq e entende melhor; 8B de reserva
+    for model in (SMART(), FAST()):  # 70B é rápido no Groq e entende melhor; 8B de reserva
         try:
             r = client().chat.completions.create(
                 model=model,
@@ -95,7 +108,7 @@ def route(history: list[dict], text: str, context: str = "") -> dict:
 
 def look(image_b64: str, question: str) -> str:
     r = client().chat.completions.create(
-        model=VISION,
+        model=VISION(),
         messages=[
             {
                 "role": "user",
@@ -135,7 +148,7 @@ Só alert=true se for algo que realmente encaixa nas regras ou é claramente imp
 
 def analyze_screen(image_b64: str, rules: str, context: str = "") -> dict:
     r = client().chat.completions.create(
-        model=VISION,
+        model=VISION(),
         messages=[
             {
                 "role": "user",
