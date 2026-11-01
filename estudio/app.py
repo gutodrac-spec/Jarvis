@@ -45,11 +45,21 @@ RESOLUCOES = {
     "Qualidade": {"16:9": (768, 448), "9:16": (448, 768), "1:1": (512, 512)},
 }
 
-# No Hugging Face Space com ZeroGPU, o decorador reserva a GPU durante a geração.
+# No Hugging Face Space com ZeroGPU, o Space define SPACES_ZERO_GPU e a GPU só existe
+# dentro das funções com @spaces.GPU. Fora delas o PyTorch simula a GPU.
+ZERO_GPU = bool(os.environ.get("SPACES_ZERO_GPU"))
+
+
+def _duracao(prompt, preset, imagem, formato, segundos, qualidade, turbo, semente):
+    """Duração dinâmica: reserva só o tempo de GPU que o vídeo precisa (gasta menos cota)."""
+    por_segundo = 4 if qualidade == "Rápido" else 10
+    return int(min(120, 15 + float(segundos) * por_segundo * (0.6 if turbo else 1)))
+
+
 try:
     import spaces
 
-    usar_gpu = spaces.GPU(duration=120)
+    usar_gpu = spaces.GPU(duration=_duracao)
 except ImportError:
     def usar_gpu(f):
         return f
@@ -59,6 +69,8 @@ def _dtype():
     escolha = os.environ.get("ESTUDIO_DTYPE")
     if escolha in ("fp16", "bf16"):
         return torch.float16 if escolha == "fp16" else torch.bfloat16
+    if ZERO_GPU:  # RTX Pro 6000 Blackwell: bf16 nativo
+        return torch.bfloat16
     # T4/P100 (Kaggle, Colab) não têm bf16 nativo: fp16 é bem mais rápido nelas.
     if torch.cuda.is_available() and torch.cuda.get_device_capability(0)[0] >= 8:
         return torch.bfloat16
@@ -80,13 +92,16 @@ def _carregar():
     from transformers import T5EncoderModel, T5TokenizerFast
 
     dtype = _dtype()
-    n_gpus = torch.cuda.device_count()
-    dev = "cuda:0" if n_gpus else "cpu"
-    dev_texto = "cuda:1" if n_gpus >= 2 else dev
-    vram = torch.cuda.get_device_properties(0).total_memory / 2**30 if n_gpus else 0
+    if ZERO_GPU:  # 48 GB de VRAM: tudo na mesma GPU, sem quantizar
+        n_gpus, dev, dev_texto, vram = 1, "cuda", "cuda", 48
+    else:
+        n_gpus = torch.cuda.device_count()
+        dev = "cuda:0" if n_gpus else "cpu"
+        dev_texto = "cuda:1" if n_gpus >= 2 else dev
+        vram = torch.cuda.get_device_properties(0).total_memory / 2**30 if n_gpus else 0
 
     # Codificador de texto (T5-XXL, ~9,5 GB em fp16).
-    kw_texto = {"torch_dtype": dtype}
+    kw_texto = {"dtype": dtype}
     if n_gpus == 1 and vram < 20:
         # Só 1 GPU pequena (Colab): T5 em 8 bits para caber junto do modelo de vídeo.
         from transformers import BitsAndBytesConfig
@@ -119,7 +134,7 @@ def _carregar():
         transformer=transformer,
     ).to(dev)
     pipe.vae.enable_tiling()
-    if os.environ.get("ESTUDIO_COMPILAR") == "1":
+    if os.environ.get("ESTUDIO_COMPILAR") == "1" and not ZERO_GPU:  # ZeroGPU não aceita torch.compile
         # CUDA Graphs: grava a sequência de operações da GPU e repete com uma ordem só,
         # tirando o custo de lançar cada operação. A 1ª geração de cada formato fica mais lenta (compila).
         pipe.transformer.compile(mode="reduce-overhead")
@@ -143,16 +158,17 @@ def _carregar():
 def _codificar(frase: str):
     """Texto -> embeddings do T5, com cache (o mesmo prompt não é codificado duas vezes)."""
     if frase in M["cache"]:
-        return M["cache"][frase]
+        emb, mascara = M["cache"][frase]
+        return emb.to(M["dev"]), mascara.to(M["dev"])
     t = M["tokenizer"]([frase], padding="max_length", max_length=TOKENS, truncation=True,
                        add_special_tokens=True, return_tensors="pt")
     mascara = t.attention_mask.to(M["dev_texto"])
     emb = M["texto"](t.input_ids.to(M["dev_texto"]), attention_mask=mascara)[0]
-    saida = (emb.to(M["dev"], M["dtype"]), mascara.to(M["dev"]))
+    emb, mascara = emb.to(M["dev"], M["dtype"]), mascara.to(M["dev"])
     if len(M["cache"]) > 64:
         M["cache"].clear()
-    M["cache"][frase] = saida
-    return saida
+    M["cache"][frase] = (emb.cpu(), mascara.cpu())  # cache na CPU: funciona também no ZeroGPU
+    return emb, mascara
 
 
 def _quadros(segundos: float, fps: int = FPS) -> int:
@@ -183,14 +199,10 @@ def _interpolar(entrada: str) -> str:
 
 @usar_gpu
 @torch.inference_mode()
-def gerar(prompt, preset, imagem, formato, segundos, qualidade, turbo, semente):
-    from diffusers.utils import export_to_video
-
-    if not prompt and imagem is None:
-        raise gr.Error("Escreva um prompt ou envie uma imagem.")
+def _gerar_quadros(prompt, preset, imagem, formato, segundos, qualidade, turbo, semente):
+    """A parte que usa GPU. Tudo que é CPU (salvar o MP4, interpolar) fica fora, para não gastar cota."""
     _carregar()
     largura, altura = RESOLUCOES.get(qualidade, RESOLUCOES["Rápido"]).get(formato, (512, 288))
-    semente = int(semente) if semente is not None and int(semente) >= 0 else random.randint(0, 2**31 - 1)
 
     fps = FPS_TURBO if turbo else FPS
     emb, mascara = _codificar(montar_prompt(prompt or "", preset))
@@ -219,13 +231,24 @@ def gerar(prompt, preset, imagem, formato, segundos, qualidade, turbo, semente):
         img = Image.open(imagem) if isinstance(imagem, str) else imagem
         args["image"] = img.convert("RGB").resize((largura, altura))
 
-    quadros = M["pipe"](**args).frames[0]
+    return M["pipe"](**args).frames[0], largura, altura, M["modo"]
+
+
+def gerar(prompt, preset, imagem, formato, segundos, qualidade, turbo, semente):
+    from diffusers.utils import export_to_video
+
+    if not prompt and imagem is None:
+        raise gr.Error("Escreva um prompt ou envie uma imagem.")
+    semente = int(semente) if semente is not None and int(semente) >= 0 else random.randint(0, 2**31 - 1)
+    quadros, largura, altura, modo = _gerar_quadros(
+        prompt, preset, imagem, formato, segundos, qualidade, turbo, semente)
+    fps = FPS_TURBO if turbo else FPS
     saida = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
     export_to_video(quadros, saida, fps=fps)
     if turbo:
         saida = _interpolar(saida)
     return saida, (f"semente {semente} · {largura}x{altura} · {len(quadros)} quadros gerados"
-                   f"{' + interpolação' if turbo else ''} · modelo {M['modo']}")
+                   f"{' + interpolação' if turbo else ''} · modelo {modo}")
 
 
 def registrar_link(link: str, site: str):
@@ -245,6 +268,9 @@ def registrar_link(link: str, site: str):
 
 with gr.Blocks(title="Estúdio") as demo:
     gr.Markdown("# 🎬 Estúdio\nTexto ou imagem → vídeo, com movimentos de câmera prontos.")
+    if ZERO_GPU:
+        gr.Markdown("Grátis: cada visitante usa a própria cota de GPU do Hugging Face. "
+                    "**Entre na sua conta do huggingface.co** para ter 5 min por dia (sem login são 2 min).")
     with gr.Row():
         with gr.Column():
             prompt = gr.Textbox(label="Prompt", lines=3, placeholder="uma astronauta caminhando num deserto ao pôr do sol")
@@ -267,6 +293,9 @@ with gr.Blocks(title="Estúdio") as demo:
         [video, info],
         api_name="gerar",
     )
+
+if ZERO_GPU:
+    _carregar()  # no ZeroGPU os modelos têm que ir para a "cuda" no início, fora da função da GPU
 
 if __name__ == "__main__":
     if os.environ.get("ESTUDIO_PRECARREGAR") == "1":

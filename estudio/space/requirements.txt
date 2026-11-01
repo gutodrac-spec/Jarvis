@@ -1,0 +1,7 @@
+torch==2.13.0
+diffusers==0.42.1
+transformers>=4.56
+accelerate
+sentencepiece
+imageio
+imageio-ffmpeg
