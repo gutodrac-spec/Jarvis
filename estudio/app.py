@@ -16,6 +16,7 @@ Variáveis de ambiente (todas opcionais):
   ESTUDIO_SITE         "usuario/estudio": HF Space estático que recebe o link atual (precisa de HF_TOKEN)
   ESTUDIO_MODELO       "destilado" (padrão) ou "normal" (LTX 0.9.5 completo, mais lento)
   ESTUDIO_DTYPE        "fp16" ou "bf16" (padrão: bf16 se a GPU tiver suporte nativo, senão fp16)
+  ESTUDIO_COMPILAR     "1" para compilar com CUDA Graphs (torch.compile reduce-overhead); meça com benchmark.py
 """
 
 import os
@@ -118,6 +119,10 @@ def _carregar():
         transformer=transformer,
     ).to(dev)
     pipe.vae.enable_tiling()
+    if os.environ.get("ESTUDIO_COMPILAR") == "1":
+        # CUDA Graphs: grava a sequência de operações da GPU e repete com uma ordem só,
+        # tirando o custo de lançar cada operação. A 1ª geração de cada formato fica mais lenta (compila).
+        pipe.transformer.compile(mode="reduce-overhead")
     pipe.set_progress_bar_config(disable=False)
 
     M.update(
