@@ -7,7 +7,8 @@ Por que é rápido:
   * usa o LTX-Video 0.9.8 **destilado** (2B): 7 passos e sem CFG, contra 30 passos x2 do modelo normal;
   * com 2 GPUs (Kaggle), o codificador de texto fica na segunda GPU e o vídeo na primeira,
     então nada precisa ser quantizado nem ir e voltar da CPU;
-  * o texto codificado fica em cache, e o modelo pode ser pré-carregado antes da 1ª geração.
+  * o texto codificado fica em cache, e o modelo pode ser pré-carregado antes da 1ª geração;
+  * modo Turbo: a IA gera 12 fps (metade do trabalho) e o ffmpeg interpola os quadros até 24 fps.
 
 Variáveis de ambiente (todas opcionais):
   ESTUDIO_SHARE        "1" para gerar link público (Kaggle/Colab)
@@ -24,12 +25,18 @@ import tempfile
 import gradio as gr
 import torch
 
+if torch.cuda.is_available():
+    torch.backends.cudnn.benchmark = True  # escolhe o algoritmo de convolução mais rápido (VAE)
+    torch.backends.cuda.matmul.allow_tf32 = True  # contas mais rápidas em GPUs L4/A100 e mais novas
+    torch.backends.cudnn.allow_tf32 = True
+
 from presets import NEGATIVO, PRESETS, montar_prompt
 
 BASE = "Lightricks/LTX-Video-0.9.5"  # configs, VAE, T5 e tokenizer (formato diffusers)
 DESTILADO = "https://huggingface.co/Lightricks/LTX-Video/blob/main/ltxv-2b-0.9.8-distilled.safetensors"
 PASSOS_DESTILADO = [1000, 993, 987, 981, 975, 909, 725, 0.03]
 FPS = 24
+FPS_TURBO = 12  # no modo Turbo a IA gera 12 fps e o ffmpeg interpola até 24
 TOKENS = 128
 
 RESOLUCOES = {
@@ -143,14 +150,35 @@ def _codificar(frase: str):
     return saida
 
 
-def _quadros(segundos: float) -> int:
+def _quadros(segundos: float, fps: int = FPS) -> int:
     # O LTX exige número de quadros no formato 8k + 1.
-    return int(round(segundos * FPS / 8)) * 8 + 1
+    return int(segundos * fps / 8 + 0.5) * 8 + 1
+
+
+def _interpolar(entrada: str) -> str:
+    """Cria os quadros intermediários (12 -> 24 fps) com interpolação por movimento do ffmpeg.
+    Se falhar, devolve o vídeo original em 12 fps."""
+    import subprocess
+
+    import imageio_ffmpeg
+
+    saida = entrada.replace(".mp4", "_24fps.mp4")
+    filtro = f"minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"
+    try:
+        subprocess.run(
+            [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-i", entrada, "-vf", filtro,
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", saida],
+            check=True, timeout=120,
+        )
+        return saida
+    except Exception as erro:  # noqa: BLE001
+        print(f"[estudio] interpolação falhou ({erro}); devolvendo em {FPS_TURBO} fps.")
+        return entrada
 
 
 @usar_gpu
 @torch.inference_mode()
-def gerar(prompt, preset, imagem, formato, segundos, qualidade, semente):
+def gerar(prompt, preset, imagem, formato, segundos, qualidade, turbo, semente):
     from diffusers.utils import export_to_video
 
     if not prompt and imagem is None:
@@ -159,14 +187,15 @@ def gerar(prompt, preset, imagem, formato, segundos, qualidade, semente):
     largura, altura = RESOLUCOES.get(qualidade, RESOLUCOES["Rápido"]).get(formato, (512, 288))
     semente = int(semente) if semente is not None and int(semente) >= 0 else random.randint(0, 2**31 - 1)
 
+    fps = FPS_TURBO if turbo else FPS
     emb, mascara = _codificar(montar_prompt(prompt or "", preset))
     args = dict(
         prompt_embeds=emb,
         prompt_attention_mask=mascara,
         width=largura,
         height=altura,
-        num_frames=_quadros(float(segundos)),
-        frame_rate=FPS,
+        num_frames=_quadros(float(segundos), fps),
+        frame_rate=fps,
         decode_timestep=0.05,
         decode_noise_scale=0.025,
         image_cond_noise_scale=0.0,
@@ -187,8 +216,11 @@ def gerar(prompt, preset, imagem, formato, segundos, qualidade, semente):
 
     quadros = M["pipe"](**args).frames[0]
     saida = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
-    export_to_video(quadros, saida, fps=FPS)
-    return saida, f"semente {semente} · {largura}x{altura} · {len(quadros)} quadros · modelo {M['modo']}"
+    export_to_video(quadros, saida, fps=fps)
+    if turbo:
+        saida = _interpolar(saida)
+    return saida, (f"semente {semente} · {largura}x{altura} · {len(quadros)} quadros gerados"
+                   f"{' + interpolação' if turbo else ''} · modelo {M['modo']}")
 
 
 def registrar_link(link: str, site: str):
@@ -217,6 +249,7 @@ with gr.Blocks(title="Estúdio") as demo:
                 formato = gr.Radio(["16:9", "9:16", "1:1"], value="16:9", label="Formato")
                 qualidade = gr.Radio(list(RESOLUCOES), value="Rápido", label="Qualidade")
             segundos = gr.Slider(1, 5, value=3, step=0.5, label="Duração (s)")
+            turbo = gr.Checkbox(value=True, label="Turbo: a IA gera metade dos quadros e o resto é interpolado (~2x mais rápido)")
             semente = gr.Number(value=-1, label="Semente (-1 = aleatória)", precision=0)
             botao = gr.Button("Gerar", variant="primary")
         with gr.Column():
@@ -225,7 +258,7 @@ with gr.Blocks(title="Estúdio") as demo:
 
     botao.click(
         gerar,
-        [prompt, preset, imagem, formato, segundos, qualidade, semente],
+        [prompt, preset, imagem, formato, segundos, qualidade, turbo, semente],
         [video, info],
         api_name="gerar",
     )

@@ -67,6 +67,8 @@
         <div><label for="qualidade">Qualidade</label>
           <select id="qualidade"><option>Rápido</option><option>Qualidade</option></select></div>
       </div>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--texto)">
+        <input id="turbo" type="checkbox" checked style="width:auto"> Turbo (~2x mais rápido, interpola os quadros)</label>
 
       <button class="gerar" id="gerar">Gerar</button>
       <div id="status"></div>
@@ -137,7 +139,7 @@ $("gerar").onclick = async () => {
     $("status").textContent = "Gerando…";
     const r = await cliente.predict("/gerar", [
       prompt, preset, arquivo ? handle_file(arquivo) : null,
-      $("formato").value, Number($("segundos").value), $("qualidade").value, -1,
+      $("formato").value, Number($("segundos").value), $("qualidade").value, $("turbo").checked, -1,
     ]);
     const saida = r.data[0];
     const url = saida?.video?.url || saida?.url;
