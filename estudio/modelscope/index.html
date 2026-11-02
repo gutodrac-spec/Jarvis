@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estúdio</title>
+<style>
+  :root {
+    --bg: #0b0b10; --painel: #15151d; --borda: #26263a; --texto: #ececf4;
+    --suave: #9a9ab0; --destaque: #a78bfa; --destaque-forte: #7c3aed; --erro: #f87171; --ok: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--texto);
+         font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 1140px; margin: 0 auto; padding: 20px 16px 64px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 26px; }
+  .sub { color: var(--suave); margin: 4px 0 18px; }
+  .conta { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--suave); flex-wrap: wrap; }
+  .btn { border: 1px solid var(--borda); background: var(--painel); color: var(--texto); border-radius: 10px;
+         padding: 8px 14px; font: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn.hf { background: #ffd21e; color: #111; border-color: #ffd21e; font-weight: 600; }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  .grade { display: grid; grid-template-columns: 390px 1fr; gap: 20px; }
+  @media (max-width: 860px) { .grade { grid-template-columns: 1fr; } }
+  .painel { background: var(--painel); border: 1px solid var(--borda); border-radius: 14px; padding: 16px; min-width: 0; }
+  .abas { display: flex; gap: 6px; margin-bottom: 4px; }
+  .aba { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--borda); background: var(--bg);
+         color: var(--suave); font: inherit; cursor: pointer; }
+  .aba[aria-selected="true"] { color: var(--texto); border-color: var(--destaque); box-shadow: 0 0 0 1px var(--destaque) inset; }
+  label { display: block; font-size: 13px; color: var(--suave); margin: 14px 0 6px; }
+  input, textarea, select { width: 100%; background: var(--bg); color: var(--texto);
+    border: 1px solid var(--borda); border-radius: 10px; padding: 10px; font: inherit; }
+  textarea { resize: vertical; min-height: 80px; }
+  .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+  .preset { background: var(--bg); border: 1px solid var(--borda); border-radius: 10px;
+    padding: 9px 6px; color: var(--texto); cursor: pointer; font-size: 13px; text-align: center; }
+  .preset .ic { display: block; font-size: 19px; }
+  .preset[aria-pressed="true"] { border-color: var(--destaque); box-shadow: 0 0 0 1px var(--destaque) inset; }
+  .linha { display: flex; gap: 10px; } .linha > * { flex: 1; min-width: 0; }
+  .principal { width: 100%; margin-top: 18px; padding: 13px; border: 0; border-radius: 12px;
+    background: linear-gradient(90deg, var(--destaque-forte), var(--destaque)); color: white;
+    font-weight: 600; font-size: 16px; cursor: pointer; }
+  .principal:disabled { opacity: .5; cursor: wait; }
+  .mini { font-size: 13px; padding: 6px 10px; margin-top: 6px; }
+  #status { font-size: 13px; min-height: 20px; margin-top: 10px; color: var(--suave); white-space: pre-line; }
+  #status.erro { color: var(--erro); } #status.ok { color: var(--ok); }
+  details { margin-top: 16px; border: 1px dashed var(--borda); border-radius: 10px; padding: 10px; }
+  summary { cursor: pointer; color: var(--suave); font-size: 14px; }
+  .dica { font-size: 12px; color: var(--suave); margin-top: 4px; }
+  .atual img, .atual video { width: 100%; border-radius: 10px; background: #000; display: block; }
+  .acoes { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .historico { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 16px; }
+  .historico figure { margin: 0; cursor: pointer; }
+  .historico img, .historico video { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; background: #000; }
+  .historico figcaption { font-size: 12px; color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vazio { color: var(--suave); text-align: center; padding: 60px 0; }
+  a { color: var(--destaque); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>🎬 Estúdio</h1>
+    <div class="conta" id="conta"></div>
+  </header>
+  <p class="sub">Imagens e vídeos com os modelos do ModelScope, ou vídeo com câmera cinematográfica no ZeroGPU. Grátis.</p>
+
+  <div class="grade">
+    <section class="painel">
+      <div class="abas" role="tablist">
+        <button class="aba" role="tab" id="aba-imagem" aria-selected="true">🖼️ Imagem</button>
+        <button class="aba" role="tab" id="aba-video" aria-selected="false">🎬 Vídeo</button>
+      </div>
+
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" placeholder="uma astronauta caminhando num deserto ao pôr do sol"></textarea>
+      <button class="btn mini" id="melhorar" type="button">✨ Melhorar prompt (traduz e detalha)</button>
+
+      <div id="so-imagem">
+        <label for="modelo">Modelo de imagem (ModelScope)</label>
+        <select id="modelo"></select>
+        <input id="modelo-outro" placeholder="ID do modelo, ex.: dono/nome" hidden>
+        <div class="dica" id="modelo-dica"></div>
+        <label for="ref" id="ref-label">Imagem para editar</label>
+        <input id="ref" type="file" accept="image/*">
+      </div>
+
+      <div id="so-video" hidden>
+        <label for="motor">Motor de vídeo</label>
+        <select id="motor">
+          <option value="ms">ModelScope (Wan) — com o seu token</option>
+          <option value="zero">ZeroGPU (LTX 13B) — com login do Hugging Face</option>
+        </select>
+        <div id="campo-ms-video">
+          <label for="modelo-video">Modelo de vídeo (ModelScope)</label>
+          <select id="modelo-video"></select>
+          <input id="modelo-video-outro" placeholder="ID do modelo, ex.: Wan-AI/Wan2.2-T2V-Fast" hidden>
+          <div class="dica">Cada conta grátis roda 1 vídeo por vez. O ModelScope define tamanho e duração.</div>
+        </div>
+        <label for="inicial">Imagem inicial (opcional — anima a imagem)</label>
+        <input id="inicial" type="file" accept="image/*">
+        <div class="dica" id="inicial-dica"></div>
+        <label>Movimento de câmera</label>
+        <div class="presets" id="presets"></div>
+      </div>
+
+      <div class="linha">
+        <div><label for="formato">Formato</label>
+          <select id="formato"><option>16:9</option><option>9:16</option><option>1:1</option></select></div>
+        <div id="campo-segundos" hidden><label for="segundos">Duração</label>
+          <select id="segundos"><option value="2" selected>2 s</option><option value="3">3 s</option>
+            <option value="4">4 s</option><option value="5">5 s</option></select></div>
+      </div>
+
+      <button class="principal" id="gerar">Gerar imagem</button>
+      <div id="status"></div>
+
+      <details id="config">
+        <summary>⚙️ Configurações</summary>
+        <label for="ms-token">Token do ModelScope (para as imagens)</label>
+        <input id="ms-token" type="password" placeholder="ms-...">
+        <div class="dica">Grátis: crie em <a href="https://modelscope.cn/my/myaccesstoken" target="_blank" rel="noopener">modelscope.cn → Access Token</a>.
+          Fica só no seu navegador. São ~2.000 chamadas grátis por dia.</div>
+        <label for="ms-proxy">Proxy (opcional)</label>
+        <input id="ms-proxy" placeholder="https://seu-proxy.workers.dev">
+        <div class="dica">Só se o navegador bloquear o ModelScope (erro de CORS). Veja o worker.js no repositório.</div>
+        <label for="llm">Modelo para melhorar o prompt</label>
+        <input id="llm" placeholder="Qwen/Qwen2.5-72B-Instruct">
+      </details>
+    </section>
+
+    <section class="painel">
+      <div class="atual" id="atual"><div class="vazio">Suas criações aparecem aqui.</div></div>
+      <div class="historico" id="historico"></div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+// ================= Configuração =================
+const MS_API = "https://api-inference.modelscope.cn";
+const MOTOR_VIDEO = "Lightricks/ltx-video-distilled"; // Space ZeroGPU oficial (LTX 0.9.8 13B)
+const GRADIO_CDN = "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.1/dist/browser.js";
+const HUB_CDN = "https://cdn.jsdelivr.net/npm/@huggingface/hub@2.17.7/+esm";
+
+// Modelos de imagem do ModelScope API-Inference (IDs testados por outros projetos; "Outro" aceita qualquer ID).
+const MODELOS = [
+  { id: "Tongyi-MAI/Z-Image-Turbo", nome: "Z-Image Turbo — o mais rápido", tipo: "t2i" },
+  { id: "Tongyi-MAI/Z-Image", nome: "Z-Image — mais detalhe", tipo: "t2i" },
+  { id: "Qwen/Qwen-Image-2512", nome: "Qwen-Image — ótimo com texto na imagem", tipo: "t2i" },
+  { id: "black-forest-labs/FLUX.2-klein-9B", nome: "FLUX.2 Klein", tipo: "t2i" },
+  { id: "black-forest-labs/FLUX.1-Krea-dev", nome: "FLUX.1 Krea — fotográfico", tipo: "t2i" },
+  { id: "MAILAND/majicflus_v1", nome: "majicFlus — retrato realista", tipo: "t2i" },
+  { id: "Qwen/Qwen-Image-Edit-2511", nome: "Qwen-Image-Edit — editar uma imagem", tipo: "edit" },
+  { id: "", nome: "Outro (digitar o ID)…", tipo: "t2i" },
+];
+// Vídeo no ModelScope: POST /v1/videos/generations (mesmo protocolo assíncrono das imagens).
+// IDs vistos em projetos abertos que usam a API; não consegui testar com um token real, então use "Outro" se algum falhar.
+const MODELOS_VIDEO = [
+  { id: "Wan-AI/Wan2.1-T2V-1.3B", nome: "Wan 2.1 T2V 1.3B — texto para vídeo" },
+  { id: "Wan-AI/Wan2.2-T2V-Fast", nome: "Wan 2.2 T2V Fast — texto para vídeo" },
+  { id: "", nome: "Outro (digitar o ID, ex.: um modelo I2V)…" },
+];
+const TAMANHOS = { "16:9": "1280x720", "9:16": "720x1280", "1:1": "1024x1024" };
+const FORMATOS_VIDEO = { "16:9": [704, 384], "9:16": [384, 704], "1:1": [512, 512] }; // largura, altura
+const NEGATIVO_VIDEO = "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text";
+const PRESETS = [
+  ["Livre", "✏️", ""],
+  ["Dolly In", "⏩", "slow dolly in toward the subject, smooth forward camera push"],
+  ["Dolly Out", "⏪", "slow dolly out away from the subject, camera pulling back revealing the scene"],
+  ["Crash Zoom", "💥", "sudden fast crash zoom into the subject, dramatic snap zoom"],
+  ["Órbita 360", "🔄", "camera orbits 360 degrees around the subject, smooth circular tracking shot"],
+  ["Drone FPV", "🚁", "fast FPV drone shot flying through the scene, dynamic banking and diving"],
+  ["Grua", "🏗️", "crane shot rising up and tilting down, revealing the landscape from above"],
+  ["Pan ←", "⬅️", "smooth camera pan from right to left"],
+  ["Pan →", "➡️", "smooth camera pan from left to right"],
+  ["Tilt ↑", "⬆️", "camera tilts up slowly from the ground to the sky"],
+  ["Na mão", "✋", "handheld camera, natural shake, documentary style"],
+  ["Bullet Time", "🕶️", "bullet time effect, frozen moment while the camera arcs around the subject"],
+  ["Snorricam", "🎯", "snorricam shot, camera rigidly attached to the subject, background moving"],
+  ["Dolly Zoom", "🌀", "dolly zoom vertigo effect, background warps while the subject stays the same size"],
+  ["Super Dolly", "🚀", "fast push in through the scene, epic cinematic super dolly move"],
+  ["Estático", "📷", "static locked-off camera, tripod shot, no camera movement"],
+];
+
+// ================= Utilidades =================
+const $ = (id) => document.getElementById(id);
+const guardar = (k, v) => { try { v == null || v === "" ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
+const ler = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const status = (txt, tipo = "") => { $("status").textContent = txt; $("status").className = tipo; };
+const escapar = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const arquivoParaDataUrl = (f) => new Promise((ok, falha) => {
+  const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = falha; r.readAsDataURL(f);
+});
+
+// ================= Estado e interface =================
+let aba = "imagem";
+let preset = PRESETS[1];
+let imagemParaAnimar = null; // URL de uma imagem gerada, usada como quadro inicial do vídeo
+
+for (const m of MODELOS) $("modelo").append(new Option(m.nome, m.id));
+for (const m of MODELOS_VIDEO) $("modelo-video").append(new Option(m.nome, m.id));
+function atualizarMotor() {
+  const ms = $("motor").value === "ms";
+  $("campo-ms-video").hidden = !ms;
+  $("campo-segundos").hidden = aba !== "video" || ms; // duração só vale no ZeroGPU
+  $("modelo-video-outro").hidden = $("modelo-video").value !== "";
+}
+$("motor").onchange = atualizarMotor;
+$("modelo-video").onchange = atualizarMotor;
+for (const p of PRESETS) {
+  const b = document.createElement("button");
+  b.className = "preset"; b.type = "button";
+  b.innerHTML = `<span class="ic">${p[1]}</span>${p[0]}`;
+  b.setAttribute("aria-pressed", p === preset);
+  b.onclick = () => { preset = p; document.querySelectorAll(".preset").forEach((x) => x.setAttribute("aria-pressed", x === b)); };
+  $("presets").append(b);
+}
+
+$("ms-token").value = ler("ms-token") || "";
+$("ms-proxy").value = ler("ms-proxy") || "";
+$("llm").value = ler("ms-llm") || "";
+for (const [id, chave] of [["ms-token", "ms-token"], ["ms-proxy", "ms-proxy"], ["llm", "ms-llm"]]) {
+  $(id).addEventListener("change", () => guardar(chave, $(id).value.trim()));
+}
+
+function modeloAtual() {
+  const m = MODELOS.find((x) => x.id === $("modelo").value) || MODELOS[0];
+  return { ...m, id: m.id || $("modelo-outro").value.trim() };
+}
+function atualizarModelo() {
+  const m = MODELOS.find((x) => x.id === $("modelo").value);
+  $("modelo-outro").hidden = m.id !== "";
+  const editar = m.tipo === "edit";
+  $("ref").hidden = $("ref-label").hidden = !editar;
+  $("modelo-dica").textContent = editar ? "Envie uma imagem e descreva a mudança (ex.: 'troque o fundo por uma praia')." : "";
+}
+$("modelo").onchange = atualizarModelo;
+
+function mudarAba(nova) {
+  aba = nova;
+  $("aba-imagem").setAttribute("aria-selected", nova === "imagem");
+  $("aba-video").setAttribute("aria-selected", nova === "video");
+  $("so-imagem").hidden = nova !== "imagem";
+  $("so-video").hidden = nova !== "video";
+  atualizarMotor();
+  $("gerar").textContent = nova === "imagem" ? "Gerar imagem" : "Gerar vídeo";
+  $("inicial-dica").textContent = imagemParaAnimar ? "Usando a última imagem gerada como quadro inicial (envie outra para trocar)." : "";
+}
+$("aba-imagem").onclick = () => mudarAba("imagem");
+$("aba-video").onclick = () => mudarAba("video");
+atualizarModelo();
+
+// ================= Resultados e histórico =================
+const historico = [];
+function mostrar(item) {
+  const el = $("atual");
+  if (item.tipo === "imagem") {
+    el.innerHTML = `<img src="${escapar(item.url)}" alt="${escapar(item.legenda)}">
+      <div class="acoes"><a class="btn" href="${escapar(item.url)}" target="_blank" rel="noopener" download>⬇️ Baixar</a>
+      <button class="btn" id="animar">🎬 Animar esta imagem</button></div>`;
+    $("animar").onclick = () => { imagemParaAnimar = item.url; mudarAba("video"); $("inicial").value = ""; };
+  } else {
+    el.innerHTML = `<video src="${escapar(item.url)}" controls autoplay loop playsinline></video>
+      <div class="acoes"><a class="btn" href="${escapar(item.url)}" target="_blank" rel="noopener" download>⬇️ Baixar</a></div>`;
+  }
+}
+function adicionar(item) {
+  historico.unshift(item);
+  mostrar(item);
+  $("historico").innerHTML = historico.slice(1).map((h, i) => `<figure data-i="${i + 1}">${
+    h.tipo === "imagem" ? `<img src="${escapar(h.url)}" alt="">`
+                        : `<video src="${escapar(h.url)}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>`
+  }<figcaption title="${escapar(h.legenda)}">${escapar(h.legenda)}</figcaption></figure>`).join("");
+  $("historico").querySelectorAll("figure").forEach((f) => f.onclick = () => mostrar(historico[Number(f.dataset.i)]));
+}
+
+// ================= ModelScope (imagens e texto) =================
+function msBase() { return ($("ms-proxy").value.trim() || MS_API).replace(/\/+$/, ""); }
+function msToken() {
+  const t = $("ms-token").value.trim();
+  if (!t) { $("config").open = true; throw new Error("Coloque seu token do ModelScope em ⚙️ Configurações."); }
+  return t;
+}
+async function msFetch(caminho, opcoes = {}) {
+  let r;
+  try {
+    r = await fetch(msBase() + caminho, {
+      ...opcoes,
+      headers: { Authorization: `Bearer ${msToken()}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+    });
+  } catch (e) {
+    if (e.message?.startsWith("Coloque")) throw e;
+    $("config").open = true;
+    throw new Error("O navegador não conseguiu falar com o ModelScope (provável bloqueio de CORS).\n" +
+                    "Configure um proxy em ⚙️ Configurações (veja o worker.js no repositório).");
+  }
+  const texto = await r.text();
+  let dados = {}; try { dados = JSON.parse(texto); } catch {}
+  if (!r.ok) {
+    const msg = dados?.errors?.message || dados?.error?.message || dados?.message || texto.slice(0, 200);
+    if (r.status === 401) throw new Error("Token do ModelScope inválido. Confira em ⚙️ Configurações.");
+    if (r.status === 429) throw new Error("Limite do ModelScope atingido. Espere um pouco ou tente amanhã.");
+    throw new Error(`ModelScope (${r.status}): ${msg}`);
+  }
+  return dados;
+}
+
+async function gerarImagem(prompt) {
+  const m = modeloAtual();
+  if (!m.id) throw new Error("Digite o ID do modelo.");
+  const corpo = { model: m.id, prompt };
+  if (m.tipo === "edit") {
+    const f = $("ref").files[0];
+    if (!f) throw new Error("Envie a imagem que você quer editar.");
+    corpo.image_url = await arquivoParaDataUrl(f);
+  } else {
+    corpo.size = TAMANHOS[$("formato").value];
+  }
+  status("Enviando para o ModelScope…");
+  const envio = await msFetch("/v1/images/generations", {
+    method: "POST", body: JSON.stringify(corpo), headers: { "X-ModelScope-Async-Mode": "true" },
+  });
+  if (!envio.task_id) throw new Error("O ModelScope não devolveu uma tarefa.");
+  for (let i = 0; i < 100; i++) { // até ~5 min
+    await esperar(3000);
+    const t = await msFetch(`/v1/tasks/${envio.task_id}`, { headers: { "X-ModelScope-Task-Type": "image_generation" } });
+    if (t.task_status === "SUCCEED" && t.output_images?.length) return t.output_images[0];
+    if (t.task_status === "FAILED") throw new Error("A geração falhou: " + (t.errors?.message || t.message || "sem detalhes"));
+    status(t.task_status === "RUNNING" ? `Gerando a imagem… (${(i + 1) * 3}s)` : "Na fila do ModelScope…");
+  }
+  throw new Error("Demorou demais. Tente de novo.");
+}
+
+$("melhorar").onclick = async () => {
+  const texto = $("prompt").value.trim();
+  if (!texto) return status("Escreva uma ideia primeiro.", "erro");
+  $("melhorar").disabled = true;
+  status("Melhorando o prompt…");
+  try {
+    const r = await msFetch("/v1/chat/completions", { method: "POST", body: JSON.stringify({
+      model: $("llm").value.trim() || "Qwen/Qwen2.5-72B-Instruct",
+      messages: [
+        { role: "system", content: "You write prompts for AI image and video generators. Rewrite the user's idea as ONE vivid English prompt (max 60 words): subject, action, setting, lighting, style. Reply with the prompt only." },
+        { role: "user", content: texto },
+      ],
+    }) });
+    const novo = r.choices?.[0]?.message?.content?.trim();
+    if (!novo) throw new Error("O modelo não respondeu.");
+    $("prompt").value = novo;
+    status("Prompt melhorado.", "ok");
+  } catch (e) {
+    status(e.message, "erro");
+  } finally {
+    $("melhorar").disabled = false;
+  }
+};
+
+// ================= Hugging Face (vídeo no ZeroGPU) =================
+let sessao = null;
+try { sessao = JSON.parse(ler("hf-sessao") || "null"); } catch {}
+if (sessao && new Date(sessao.expira) < new Date()) sessao = null;
+
+async function hfLogin() {
+  try {
+    const { oauthLoginUrl } = await import(HUB_CDN);
+    const vars = window.huggingface?.variables || {};
+    if (!vars.OAUTH_CLIENT_ID) {
+      return status("O login do Hugging Face só funciona com a página hospedada num Space com hf_oauth: true.", "erro");
+    }
+    window.location.href = await oauthLoginUrl({ scopes: vars.OAUTH_SCOPES });
+  } catch (e) { status("Não consegui abrir o login: " + e.message, "erro"); }
+}
+async function hfRetorno() {
+  if (!/[?&#](code|state)=/.test(window.location.href)) return;
+  try {
+    const { oauthHandleRedirectIfPresent } = await import(HUB_CDN);
+    const r = await oauthHandleRedirectIfPresent();
+    if (r) {
+      sessao = { token: r.accessToken, nome: r.userInfo?.preferred_username || r.userInfo?.name, expira: r.accessTokenExpiresAt };
+      guardar("hf-sessao", JSON.stringify(sessao));
+      history.replaceState(null, "", window.location.pathname);
+    }
+  } catch (e) { status("O login não completou: " + e.message, "erro"); }
+}
+function desenharConta() {
+  const el = $("conta"); el.innerHTML = "";
+  if (sessao) {
+    el.append(Object.assign(document.createElement("span"), { textContent: `ZeroGPU: conectado como ${sessao.nome}` }));
+    const sair = Object.assign(document.createElement("button"), { className: "btn", textContent: "Sair" });
+    sair.onclick = () => { sessao = null; guardar("hf-sessao", null); desenharConta(); };
+    el.append(sair);
+  } else {
+    el.append(Object.assign(document.createElement("span"), { textContent: "ZeroGPU sem login: 2 min/dia" }));
+    const entrar = Object.assign(document.createElement("button"), { className: "btn hf", textContent: "🤗 Entrar (5 min/dia)" });
+    entrar.onclick = hfLogin;
+    el.append(entrar);
+  }
+}
+
+// ---- Vídeo no ModelScope ----
+async function gerarVideoMS(prompt) {
+  let id = $("modelo-video").value || $("modelo-video-outro").value.trim();
+  if (!id) throw new Error("Digite o ID do modelo de vídeo.");
+  const texto = [prompt || "the scene comes to life", preset[2], "cinematic, high quality, smooth motion"].filter(Boolean).join(", ");
+  const corpo = { model: id, prompt: texto, negative_prompt: NEGATIVO_VIDEO };
+  const arquivo = $("inicial").files[0];
+  if ((arquivo || imagemParaAnimar) && $("modelo-video").value) {
+    throw new Error("Os modelos da lista só fazem texto → vídeo. Para animar uma imagem, escolha “Outro” e digite um modelo " +
+                    "de imagem → vídeo (I2V), ou troque o motor para ZeroGPU.");
+  }
+  if (arquivo) corpo.image_url = await arquivoParaDataUrl(arquivo);
+  else if (imagemParaAnimar) corpo.image_url = imagemParaAnimar;
+
+  status("Enviando o vídeo para o ModelScope…");
+  const envio = await msFetch("/v1/videos/generations", {
+    method: "POST", body: JSON.stringify(corpo), headers: { "X-ModelScope-Async-Mode": "true" },
+  });
+  const direto = envio.output_videos?.[0];
+  if (direto) return direto;
+  if (!envio.task_id) throw new Error("O ModelScope não devolveu uma tarefa de vídeo.");
+  for (let i = 0; i < 180; i++) { // até ~15 min
+    await esperar(5000);
+    const t = await msFetch(`/v1/tasks/${envio.task_id}`, { headers: { "X-ModelScope-Task-Type": "video_generation" } });
+    if (t.task_status === "SUCCEED") {
+      const url = t.output_videos?.[0] || t.output_images?.[0] || t.outputs?.video_url;
+      if (!url) throw new Error("O vídeo ficou pronto, mas não achei o endereço dele na resposta: " + JSON.stringify(t).slice(0, 200));
+      return url;
+    }
+    if (t.task_status === "FAILED") throw new Error("A geração falhou: " + (t.errors?.message || t.message || "sem detalhes"));
+    status(t.task_status === "RUNNING" ? `Gerando o vídeo… (${(i + 1) * 5}s)` : "Na fila do ModelScope…");
+  }
+  throw new Error("Demorou demais. Tente de novo.");
+}
+
+async function gerarVideo(prompt) {
+  if ($("motor").value === "ms") return gerarVideoMS(prompt);
+  const { Client, handle_file } = await import(GRADIO_CDN);
+  const arquivo = $("inicial").files[0];
+  const inicial = arquivo ? handle_file(arquivo) : imagemParaAnimar ? handle_file(imagemParaAnimar) : null;
+  const [largura, altura] = FORMATOS_VIDEO[$("formato").value];
+  const texto = [prompt || "the scene comes to life", preset[2], "cinematic, high quality, smooth motion"].filter(Boolean).join(", ");
+  const modo = inicial ? "image-to-video" : "text-to-video";
+  // Ordem de entradas do Space da Lightricks:
+  // prompt, negativo, imagem, vídeo, altura, largura, modo, duração, quadros, semente, aleatória, CFG, textura
+  const entradas = [texto, NEGATIVO_VIDEO, inicial, null, altura, largura, modo,
+                    Number($("segundos").value), 9, 42, true, 1.0, true];
+  status("Conectando ao ZeroGPU…");
+  const cliente = await Client.connect(MOTOR_VIDEO, sessao ? { token: sessao.token } : {});
+  const job = cliente.submit(inicial ? "/image_to_video" : "/text_to_video", entradas);
+  for await (const ev of job) {
+    if (ev.type === "status") {
+      if (ev.stage === "error") throw new Error(ev.message || "falhou");
+      if (ev.stage === "pending") status(ev.position != null ? `Na fila do ZeroGPU: posição ${ev.position + 1}…` : "Na fila do ZeroGPU…");
+      else if (ev.stage === "generating") status("Gerando o vídeo na GPU…");
+    } else if (ev.type === "data") {
+      const v = ev.data?.[0];
+      const url = v?.video?.url || v?.url;
+      if (!url) throw new Error("o motor não devolveu um vídeo");
+      return url;
+    }
+  }
+  throw new Error("o motor encerrou sem resposta");
+}
+function explicarErroVideo(m) {
+  if ($("motor").value === "ms" && /\(429\)|limite/i.test(m)) {
+    return "O ModelScope só roda 1 vídeo por vez na conta grátis. Espere o anterior terminar e tente de novo.";
+  }
+  if (/quota|GPU limit|exceeded/i.test(m)) return "Sua cota grátis de GPU acabou por hoje. " +
+    (sessao ? "Ela volta 24 h depois do primeiro uso." : "Entre com sua conta do Hugging Face para ter mais.");
+  if (/sleep|paused|building/i.test(m)) return "O motor de vídeo está acordando. Tente de novo em 1 minuto.";
+  return "Erro no vídeo: " + m;
+}
+
+// ================= Botão principal =================
+$("gerar").onclick = async () => {
+  const prompt = $("prompt").value.trim();
+  $("gerar").disabled = true;
+  try {
+    if (aba === "imagem") {
+      if (!prompt) throw new Error("Escreva um prompt.");
+      const url = await gerarImagem(prompt);
+      adicionar({ tipo: "imagem", url, legenda: `${modeloAtual().id.split("/")[1] || "imagem"} · ${prompt}` });
+      status("Imagem pronta! Clique em 🎬 Animar para virar vídeo.", "ok");
+    } else {
+      if (!prompt && !$("inicial").files[0] && !imagemParaAnimar) throw new Error("Escreva um prompt ou envie uma imagem.");
+      try {
+        const url = await gerarVideo(prompt);
+        adicionar({ tipo: "video", url, legenda: `${preset[0]} · ${prompt || "imagem animada"}` });
+        status("Vídeo pronto!", "ok");
+      } catch (e) { throw new Error(explicarErroVideo(e.message || String(e))); }
+    }
+  } catch (e) {
+    status(e.message || String(e), "erro");
+  } finally {
+    $("gerar").disabled = false;
+  }
+};
+
+await hfRetorno();
+desenharConta();
+</script>
+</body>
+</html>
