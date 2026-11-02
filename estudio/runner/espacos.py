@@ -448,6 +448,45 @@ def normalizar(valor, esp: Espaco | None, arquivos: list[str] | None = None):
     return volta(valor), arquivos
 
 
+_CODIGO_GPU = ("import json,torch;d=torch.cuda.is_available();"
+               "print(json.dumps({'cuda':d,'nome':torch.cuda.get_device_name(0) if d else None,'torch':torch.__version__}))")
+
+
+def diagnostico_gpu() -> dict:
+    """A GPU como um processo FILHO a enxerga. É assim que os Spaces rodam aqui: se o xGPU só liga a GPU dentro do
+    processo principal, o resultado é cuda=false e os Spaces ficariam na CPU."""
+    try:
+        r = subprocess.run([sys.executable, "-c", _CODIGO_GPU], capture_output=True, text=True, timeout=180)
+        return json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception as erro:  # noqa: BLE001
+        return {"erro": str(erro)[:300]}
+
+
+def limpar_antigos(idade: int = 7200) -> int:
+    """Apaga saídas e caches com mais de `idade` segundos (o disco do Studio é pequeno). Devolve quantos arquivos saíram."""
+    limite = time.time() - idade
+    pastas = [DADOS / "saidas", *(DADOS / "espacos").glob("*/saidas"), *(DADOS / "espacos").glob("*/tmp")]
+    apagados = 0
+    for pasta in pastas:
+        for arquivo in pasta.rglob("*"):
+            try:
+                if arquivo.is_file() and arquivo.stat().st_mtime < limite:
+                    arquivo.unlink()
+                    apagados += 1
+            except OSError:
+                pass
+    return apagados
+
+
+def iniciar_limpeza(idade: int = 7200, intervalo: int = 600):
+    def laco():
+        while True:
+            time.sleep(intervalo)
+            limpar_antigos(idade)
+
+    threading.Thread(target=laco, daemon=True, name="limpeza").start()
+
+
 def estado_geral() -> list[dict]:
     with TRAVA:
         return [e.resumo() for e in REGISTRO.values()]

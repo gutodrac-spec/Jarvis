@@ -56,6 +56,8 @@ try:
     print("status e segurança")
     st = api.predict(api_name="/status")
     confere("status responde", st["versao"] and st["chave_configurada"] is True and st["publicos"] == ["local:demo", "local:segundo"])
+    dg = api.predict(api_name="/diagnostico")
+    confere("diagnóstico da GPU (principal e subprocesso)", "principal" in dg and "torch" in dg["subprocesso"], str(dg))
     deve_falhar("carregar não público sem chave", lambda: api.predict("", "local:outro", api_name="/carregar"), "chave")
     deve_falhar("carregar com chave errada", lambda: api.predict("errada", "local:outro", api_name="/carregar"), "chave inválida")
     deve_falhar("id malformado", lambda: api.predict(CHAVE, "../../etc/passwd", api_name="/carregar"), "dono/nome")

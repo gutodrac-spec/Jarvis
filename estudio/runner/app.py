@@ -2,6 +2,7 @@
 
 Este app é a API. Os endpoints (todos com `api_name`):
   /status                                  GPU, Spaces carregados e se há chave configurada
+  /diagnostico                             se a GPU aparece no processo principal e num processo filho (onde os Spaces rodam)
   /carregar(chave, alvo)                   começa a carregar um Space (segundo plano); acompanhe em /status
   /apis(chave, alvo)                       endpoints e parâmetros do Space carregado
   /chamar(chave, alvo, api_name, args, arquivos)   chama um endpoint do Space
@@ -70,6 +71,10 @@ def api_status():
     return {"versao": VERSAO, "gpu": _gpu(), "espacos": espacos.estado_geral(),
             "chave_configurada": bool(os.environ.get("RUNNER_CHAVE")), "publicos": sorted(_publicos()),
             "max_ativos": espacos.MAX_ATIVOS}
+
+
+def api_diagnostico():
+    return {"principal": _gpu(), "subprocesso": espacos.diagnostico_gpu()}
 
 
 def api_carregar(chave: str, alvo: str):
@@ -141,6 +146,7 @@ with gr.Blocks(title="Executor de Spaces", delete_cache=(3600, 7200)) as demo:
     with gr.Tab("Status"):
         saida_status = gr.JSON(label="Estado")
         gr.Button("Atualizar").click(api_status, None, saida_status, api_name="status")
+        gr.Button("Testar GPU (processo principal e filho)").click(api_diagnostico, None, saida_status, api_name="diagnostico")
     with gr.Tab("Space"):
         alvo = gr.Textbox(label="Space (dono/nome)", placeholder="Lightricks/ltx-video-distilled")
         saida_space = gr.JSON(label="Resultado")
@@ -168,6 +174,7 @@ with gr.Blocks(title="Executor de Spaces", delete_cache=(3600, 7200)) as demo:
             api_name="modelo", concurrency_limit=1, concurrency_id="gpu")
 
 if __name__ == "__main__":
+    espacos.iniciar_limpeza(idade=int(os.environ.get("RUNNER_IDADE_ARQUIVOS", "7200")))
     for item in [x.strip() for x in os.environ.get("RUNNER_PRECARREGAR", "").split(",") if x.strip()][:espacos.MAX_ATIVOS]:
         try:
             espacos.iniciar(item)

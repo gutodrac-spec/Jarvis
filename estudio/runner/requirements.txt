@@ -1,0 +1,11 @@
+huggingface_hub
+pyyaml
+diffusers>=0.34
+transformers>=4.56
+accelerate
+sentencepiece
+safetensors
+pillow
+numpy
+imageio
+imageio-ffmpeg

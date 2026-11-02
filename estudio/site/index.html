@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estúdio</title>
+<style>
+  :root {
+    --bg: #0b0b10; --painel: #15151d; --borda: #26263a; --texto: #ececf4; --suave: #9a9ab0;
+    --destaque: #a78bfa; --forte: #7c3aed; --erro: #f87171; --ok: #4ade80; --aviso: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--texto); font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  .sub { color: var(--suave); margin: 0 0 16px; }
+  .painel { background: var(--painel); border: 1px solid var(--borda); border-radius: 14px; padding: 16px; margin-bottom: 16px; min-width: 0; }
+  label { display: block; font-size: 13px; color: var(--suave); margin: 12px 0 5px; }
+  input, textarea, select { width: 100%; background: var(--bg); color: var(--texto); border: 1px solid var(--borda);
+    border-radius: 10px; padding: 9px 10px; font: inherit; }
+  input[type=checkbox] { width: auto; }
+  textarea { resize: vertical; min-height: 64px; }
+  .linha { display: flex; gap: 10px; flex-wrap: wrap; } .linha > * { flex: 1; min-width: 180px; }
+  .btn { border: 1px solid var(--borda); background: var(--bg); color: var(--texto); border-radius: 10px; padding: 9px 14px;
+         font: inherit; cursor: pointer; }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  .btn.principal { background: linear-gradient(90deg, var(--forte), var(--destaque)); border: 0; color: #fff; font-weight: 600; }
+  .abas { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .aba { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--borda); background: var(--bg); color: var(--suave); font: inherit; cursor: pointer; }
+  .aba[aria-selected=true] { color: var(--texto); border-color: var(--destaque); box-shadow: 0 0 0 1px var(--destaque) inset; }
+  .msg { font-size: 13px; color: var(--suave); min-height: 20px; margin-top: 10px; white-space: pre-wrap; word-break: break-word; }
+  .msg.erro { color: var(--erro); } .msg.ok { color: var(--ok); } .msg.aviso { color: var(--aviso); }
+  .dica { font-size: 12px; color: var(--suave); margin-top: 4px; }
+  .chip { display: inline-block; border: 1px solid var(--borda); border-radius: 999px; padding: 3px 10px; font-size: 12px; margin: 0 6px 6px 0;
+          color: var(--suave); background: var(--bg); }
+  .chip.pronto { color: var(--ok); border-color: var(--ok); } .chip.erro { color: var(--erro); border-color: var(--erro); }
+  .chip.carregando { color: var(--aviso); border-color: var(--aviso); }
+  .saida > * + * { margin-top: 12px; }
+  .saida img, .saida video { max-width: 100%; border-radius: 10px; background: #000; display: block; }
+  .saida audio { width: 100%; }
+  pre { margin: 0; background: var(--bg); border: 1px solid var(--borda); border-radius: 10px; padding: 10px; overflow: auto;
+        white-space: pre-wrap; word-break: break-word; font-size: 13px; }
+  .rotulo { font-size: 12px; color: var(--suave); margin-bottom: 4px; }
+  a { color: var(--destaque); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🧩 Estúdio</h1>
+  <p class="sub">Use qualquer Space ou modelo do Hugging Face na GPU do seu Studio do ModelScope.</p>
+
+  <section class="painel" id="conexao">
+    <div class="linha">
+      <div><label for="url">Endereço do Studio (API)</label>
+        <input id="url" placeholder="https://seu-usuario-executor.ms.show" autocomplete="off"></div>
+      <div><label for="chave">Chave (RUNNER_CHAVE)</label>
+        <input id="chave" type="password" placeholder="vazio = só o que for público" autocomplete="off"></div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn principal" id="conectar">Conectar</button>
+      <button class="btn" id="diag" title="Verifica se a GPU aparece onde os Spaces rodam" hidden>🔍 Testar GPU</button>
+      <button class="btn" id="parar" title="Desliga o Space e libera a GPU" hidden>⏹ Parar tudo</button>
+    </div>
+    <div class="msg" id="msg-conexao"></div>
+    <div id="estado" style="margin-top:8px"></div>
+  </section>
+
+  <div class="abas" role="tablist">
+    <button class="aba" role="tab" id="aba-space" aria-selected="true">🧩 Space</button>
+    <button class="aba" role="tab" id="aba-modelo" aria-selected="false">🧠 Modelo solto</button>
+  </div>
+
+  <section class="painel" id="painel-space">
+    <label for="space">Space do Hugging Face (dono/nome)</label>
+    <div class="linha">
+      <input id="space" list="exemplos" placeholder="Lightricks/ltx-video-distilled" autocomplete="off">
+      <button class="btn principal" id="carregar" style="flex:0 0 auto">Carregar</button>
+    </div>
+    <datalist id="exemplos"><option value="Lightricks/ltx-video-distilled"></option></datalist>
+    <div class="dica">Só Spaces com SDK Gradio. A primeira vez baixa o código e os modelos (pode levar vários minutos).
+      O Studio mantém um Space ativo por vez.</div>
+    <div class="msg" id="msg-space"></div>
+    <pre id="log" hidden></pre>
+
+    <div id="area-endpoint" hidden>
+      <label for="endpoint">O que executar</label>
+      <select id="endpoint"></select>
+      <div id="form"></div>
+      <button class="btn principal" id="executar" style="margin-top:16px">Executar</button>
+      <div class="msg" id="msg-exec"></div>
+      <div class="saida" id="saida"></div>
+    </div>
+  </section>
+
+  <section class="painel" id="painel-modelo" hidden>
+    <div class="linha">
+      <div><label for="modelo">Modelo do Hugging Face (dono/nome)</label>
+        <input id="modelo" placeholder="stabilityai/sdxl-turbo" autocomplete="off"></div>
+      <div><label for="tarefa">Tarefa</label>
+        <input id="tarefa" list="tarefas" value="texto-para-imagem" autocomplete="off">
+        <datalist id="tarefas">
+          <option value="texto-para-imagem"></option><option value="imagem-para-imagem"></option>
+          <option value="texto-para-video"></option><option value="imagem-para-video"></option><option value="difusao"></option>
+          <option value="texto"></option><option value="reconhecimento-de-fala"></option><option value="texto-para-audio"></option>
+          <option value="traducao"></option><option value="resumo"></option><option value="classificacao-de-texto"></option>
+          <option value="classificacao-de-imagem"></option><option value="descricao-de-imagem"></option>
+        </datalist></div>
+    </div>
+    <label for="entrada">Entrada (JSON)</label>
+    <textarea id="entrada" rows="4" spellcheck="false">{"prompt": "um gato astronauta, foto realista"}</textarea>
+    <div class="dica">Para tarefas de texto/áudio use {"entrada": "..."}; para arquivos, envie abaixo e cite <code>"@arquivo:0"</code>.
+      Em tarefas de difusão, os campos são os do pipeline (prompt, num_inference_steps…).</div>
+    <label for="arquivos-modelo">Arquivos (opcional)</label>
+    <input id="arquivos-modelo" type="file" multiple>
+    <button class="btn principal" id="executar-modelo" style="margin-top:16px">Executar modelo</button>
+    <div class="msg" id="msg-modelo"></div>
+    <div class="saida" id="saida-modelo"></div>
+  </section>
+</main>
+
+<script type="module">
+import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.1/dist/browser.js";
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...filhos) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v; else if (k === "texto") e.textContent = v;
+    else if (k.startsWith("on")) e[k] = v; else e.setAttribute(k, v);
+  }
+  e.append(...filhos);
+  return e;
+};
+const guardar = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {} };
+const ler = (k) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } };
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const msg = (id, txt, tipo = "") => { $(id).textContent = txt; $(id).className = "msg " + tipo; };
+const textoErro = (e) => {
+  const m = e?.message || e?.title || (typeof e === "string" ? e : JSON.stringify(e)) || "erro desconhecido";
+  return String(m).slice(0, 600);
+};
+
+// ============ Conexão ============
+let cliente = null, urlAtual = "";
+$("url").value = ler("estudio-url");
+$("chave").value = ler("estudio-chave");
+
+async function garantirCliente() {
+  const url = $("url").value.trim().replace(/\/+$/, "");
+  if (!url) throw new Error("Cole o endereço do Studio.");
+  if (!cliente || url !== urlAtual) { cliente = await Client.connect(url); urlAtual = url; }
+  return cliente;
+}
+async function api(endpoint, args = []) {
+  const c = await garantirCliente();
+  return (await c.predict(endpoint, args)).data;
+}
+const chave = () => $("chave").value;
+
+function desenharEstado(st) {
+  const caixa = $("estado");
+  caixa.replaceChildren();
+  const gpu = st.gpu?.nome ? `GPU ${st.gpu.nome} · ${st.gpu.livre_gb}/${st.gpu.memoria_gb} GB livres` : "sem GPU visível agora";
+  caixa.append(el("span", { class: "chip", texto: gpu }),
+    el("span", { class: "chip", texto: st.chave_configurada ? "chave configurada" : "sem chave: só públicos" }));
+  for (const e of st.espacos) {
+    const cls = e.estado === "pronto" ? "pronto" : e.estado === "erro" ? "erro" : ["parado", "novo"].includes(e.estado) ? "" : "carregando";
+    caixa.append(el("span", { class: "chip " + cls, texto: `${e.id}: ${e.estado}` }));
+  }
+  if (st.publicos?.length) caixa.append(el("div", { class: "dica", texto: "Públicos: " + st.publicos.join(", ") }));
+}
+
+async function conectar() {
+  guardar("estudio-url", $("url").value.trim());
+  guardar("estudio-chave", $("chave").value);
+  $("conectar").disabled = true;
+  msg("msg-conexao", "Conectando… (se o Studio estava dormindo, a primeira vez demora)");
+  try {
+    cliente = null;
+    const [st] = await api("/status");
+    desenharEstado(st);
+    $("parar").hidden = $("diag").hidden = false;
+    msg("msg-conexao", `Conectado. Executor v${st.versao}.`, "ok");
+  } catch (e) {
+    msg("msg-conexao", "Não consegui conectar: " + textoErro(e) +
+      "\nO xGPU suspende o Studio quando ninguém usa: abra o endereço dele no navegador para acordar e tente de novo.", "erro");
+  } finally { $("conectar").disabled = false; }
+}
+$("conectar").onclick = conectar;
+$("diag").onclick = async () => {
+  $("diag").disabled = true;
+  msg("msg-conexao", "Testando a GPU (importa o torch num processo novo)…");
+  try {
+    const [d] = await api("/diagnostico");
+    const f = d.subprocesso || {};
+    if (f.erro) msg("msg-conexao", "Não consegui testar: " + f.erro, "erro");
+    else if (f.cuda) msg("msg-conexao", `GPU visível nos processos filhos: ${f.nome} (torch ${f.torch}). Os Spaces vão usá-la.`, "ok");
+    else msg("msg-conexao", "ATENÇÃO: os processos filhos NÃO enxergam a GPU (torch " + f.torch + "). Os Spaces rodariam na CPU. " +
+      (d.principal?.nome ? "O processo principal enxerga " + d.principal.nome + ": o xGPU provavelmente só liga a GPU nele." : "Confira se o recurso xGPU está ativo."), "aviso");
+  } catch (e) { msg("msg-conexao", textoErro(e), "erro"); }
+  finally { $("diag").disabled = false; }
+};
+$("parar").onclick = async () => {
+  try { await api("/parar", [chave()]); msg("msg-conexao", "Tudo parado e a GPU liberada.", "ok"); await atualizarEstado(); }
+  catch (e) { msg("msg-conexao", textoErro(e), "erro"); }
+};
+async function atualizarEstado() { const [st] = await api("/status"); desenharEstado(st); return st; }
+
+// ============ Abas ============
+function aba(qual) {
+  $("aba-space").setAttribute("aria-selected", qual === "space");
+  $("aba-modelo").setAttribute("aria-selected", qual === "modelo");
+  $("painel-space").hidden = qual !== "space";
+  $("painel-modelo").hidden = qual !== "modelo";
+}
+$("aba-space").onclick = () => aba("space");
+$("aba-modelo").onclick = () => aba("modelo");
+
+// ============ Resultados ============
+function renderArquivo(f) {
+  if (!f) return el("span", { class: "dica", texto: "(arquivo ausente)" });
+  const url = f.url || f.path, nome = f.orig_name || (url || "").split("/").pop() || "arquivo";
+  const mime = f.mime_type || "", ext = nome.split(".").pop().toLowerCase();
+  const baixar = el("a", { href: url, download: nome, target: "_blank", rel: "noopener", texto: "⬇️ " + nome });
+  let midia = null;
+  if (mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif"].includes(ext)) midia = el("img", { src: url, alt: nome });
+  else if (mime.startsWith("video/") || ["mp4", "webm", "mov"].includes(ext)) midia = el("video", { src: url, controls: "", autoplay: "", loop: "", playsinline: "" });
+  else if (mime.startsWith("audio/") || ["wav", "mp3", "flac", "ogg"].includes(ext)) midia = el("audio", { src: url, controls: "" });
+  return el("div", {}, ...(midia ? [midia] : []), el("div", { class: "dica" }, baixar));
+}
+function renderValor(v, arquivos) {
+  if (v && typeof v === "object" && "__arquivo__" in v) return renderArquivo(arquivos[v.__arquivo__]);
+  if (Array.isArray(v)) return el("div", { class: "saida" }, ...v.map((x) => renderValor(x, arquivos)));
+  if (v && typeof v === "object") {
+    return el("div", { class: "saida" }, ...Object.entries(v).map(([k, x]) =>
+      el("div", {}, el("div", { class: "rotulo", texto: k }), renderValor(x, arquivos))));
+  }
+  return el("pre", { texto: v === null || v === undefined ? "(vazio)" : String(v) });
+}
+function mostrarSaida(alvo, resultado, arquivos, rotulos = []) {
+  alvo.replaceChildren();
+  const lista = Array.isArray(resultado) ? resultado : [resultado];
+  lista.forEach((v, i) => alvo.append(el("div", {},
+    rotulos[i] ? el("div", { class: "rotulo", texto: rotulos[i] }) : "", renderValor(v, arquivos))));
+}
+// Chama um endpoint do executor e devolve [json, arquivos]. Usa predict() porque é ele que entrega a mensagem
+// de erro (o laço de submit() do cliente JS termina em silêncio quando o job falha).
+async function enviar(endpoint, args, idMsg) {
+  const c = await garantirCliente();
+  const inicio = Date.now();
+  const relogio = setInterval(() => msg(idMsg, `Executando na GPU… ${Math.round((Date.now() - inicio) / 1000)} s`), 1000);
+  try { return (await c.predict(endpoint, args)).data; }
+  finally { clearInterval(relogio); }
+}
+
+// ============ Space ============
+let apis = [], alvoAtual = "", campos = [];
+
+async function carregarSpace() {
+  const alvo = $("space").value.trim();
+  if (!alvo) return msg("msg-space", "Informe o Space (dono/nome).", "erro");
+  $("carregar").disabled = true;
+  $("area-endpoint").hidden = true;
+  alvoAtual = alvo;
+  try {
+    msg("msg-space", "Pedindo para carregar…");
+    await api("/carregar", [chave(), alvo]);
+    for (;;) {
+      const st = await atualizarEstado();
+      const e = st.espacos.find((x) => x.id === alvo);
+      if (!e) { msg("msg-space", "O executor não reconhece esse Space.", "erro"); break; }
+      if (e.estado === "pronto") { msg("msg-space", "Pronto: " + e.mensagem, "ok"); $("log").hidden = true; await carregarApis(); break; }
+      if (e.estado === "erro" || e.estado === "parado") { msg("msg-space", `${e.estado}: ${e.mensagem}`, "erro"); break; }
+      msg("msg-space", `${e.estado}: ${e.mensagem}`, "aviso");
+      try { const [l] = await api("/log", [chave(), alvo]); $("log").textContent = l.log; $("log").hidden = !l.log; $("log").scrollTop = 1e9; } catch {}
+      await esperar(3000);
+    }
+  } catch (e) { msg("msg-space", textoErro(e), "erro"); }
+  finally { $("carregar").disabled = false; }
+}
+$("carregar").onclick = carregarSpace;
+
+async function carregarApis() {
+  [apis] = await api("/apis", [chave(), alvoAtual]);
+  if (!apis.length) return msg("msg-space", "Esse Space não expõe endpoints de API.", "erro");
+  const sel = $("endpoint");
+  sel.replaceChildren(...apis.map((a) => el("option", { value: a.api_name, texto: a.api_name })));
+  sel.onchange = () => desenharFormulario(apis.find((a) => a.api_name === sel.value));
+  desenharFormulario(apis[0]);
+  $("area-endpoint").hidden = false;
+}
+
+function aceita(componente) {
+  return ({ Image: "image/*", ImageEditor: "image/*", Video: "video/*", Audio: "audio/*" })[componente] || "";
+}
+function desenharFormulario(ep) {
+  const caixa = $("form");
+  caixa.replaceChildren();
+  campos = [];
+  for (const p of ep.parametros) {
+    let entrada, tipoCampo;
+    if (p.arquivo) { entrada = el("input", { type: "file", accept: aceita(p.componente) }); tipoCampo = "arquivo"; }
+    else if (p.opcoes) {
+      entrada = el("select", {}, ...p.opcoes.map((o) => el("option", { value: o, texto: String(o) })));
+      if (p.padrao != null) entrada.value = p.padrao;
+      tipoCampo = "opcao";
+    } else if (p.tipo === "bool" || p.componente === "Checkbox") { entrada = el("input", { type: "checkbox" }); entrada.checked = !!p.padrao; tipoCampo = "bool"; }
+    else if (["Number", "Slider"].includes(p.componente) || ["int", "float"].includes(p.tipo)) {
+      entrada = el("input", { type: "number", step: p.tipo === "int" ? "1" : "any" });
+      if (p.minimo != null) entrada.min = p.minimo;
+      if (p.maximo != null) entrada.max = p.maximo;
+      if (p.padrao != null) entrada.value = p.padrao;
+      tipoCampo = "numero";
+    } else if (p.componente === "Textbox" || p.tipo === "str") {
+      entrada = el("textarea", { rows: "2" }); entrada.value = p.padrao ?? ""; tipoCampo = "texto";
+    } else {
+      entrada = el("textarea", { rows: "2", spellcheck: "false" }); entrada.value = p.padrao != null ? JSON.stringify(p.padrao) : ""; tipoCampo = "json";
+    }
+    const rotulo = `${p.rotulo || p.nome}${p.obrigatorio ? " *" : ""}${tipoCampo === "json" ? " (JSON)" : ""}`;
+    caixa.append(el("div", {}, el("label", { texto: rotulo }), entrada));
+    campos.push({ p, entrada, tipoCampo });
+  }
+  if (!ep.parametros.length) caixa.append(el("div", { class: "dica", texto: "Este endpoint não tem parâmetros." }));
+}
+
+function coletar() {
+  const args = {}, arquivos = [];
+  for (const { p, entrada, tipoCampo } of campos) {
+    if (tipoCampo === "arquivo") {
+      const f = entrada.files[0];
+      if (f) { args[p.nome] = `@arquivo:${arquivos.length}`; arquivos.push(f); }
+      else if (p.obrigatorio) args[p.nome] = null;
+    } else if (tipoCampo === "bool") args[p.nome] = entrada.checked;
+    else if (tipoCampo === "numero") {
+      if (entrada.value !== "") args[p.nome] = Number(entrada.value); else if (p.obrigatorio) args[p.nome] = null;
+    } else if (tipoCampo === "json") {
+      if (entrada.value.trim()) {
+        try { args[p.nome] = JSON.parse(entrada.value); } catch { throw new Error(`O campo "${p.rotulo || p.nome}" precisa ser um JSON válido.`); }
+      } else if (p.obrigatorio) args[p.nome] = null;
+    } else args[p.nome] = entrada.value;
+  }
+  return { args, arquivos };
+}
+
+$("executar").onclick = async () => {
+  $("executar").disabled = true;
+  $("saida").replaceChildren();
+  try {
+    const ep = apis.find((a) => a.api_name === $("endpoint").value);
+    const { args, arquivos } = coletar();
+    msg("msg-exec", "Enviando…");
+    const [res, arqs] = await enviar("/chamar", [chave(), alvoAtual, ep.api_name, JSON.stringify(args), arquivos.map((f) => handle_file(f))], "msg-exec");
+    mostrarSaida($("saida"), res.resultado, arqs || [], ep.retornos.map((r) => r.rotulo));
+    msg("msg-exec", "Pronto.", "ok");
+  } catch (e) {
+    const t = textoErro(e);
+    msg("msg-exec", t + (/est[áa] '?(baixando|instalando|iniciando)/i.test(t) ? "\nO Space ainda está carregando: use o botão Carregar e espere." : ""), "erro");
+  } finally { $("executar").disabled = false; }
+};
+
+// ============ Modelo solto ============
+$("executar-modelo").onclick = async () => {
+  $("executar-modelo").disabled = true;
+  $("saida-modelo").replaceChildren();
+  try {
+    const arqs = [...$("arquivos-modelo").files];
+    msg("msg-modelo", "Enviando… (a primeira vez baixa o modelo)");
+    const [res, saidas] = await enviar("/modelo", [chave(), $("modelo").value.trim(), $("tarefa").value.trim(), $("entrada").value,
+      arqs.map((f) => handle_file(f))], "msg-modelo");
+    mostrarSaida($("saida-modelo"), res.resultado, saidas || []);
+    msg("msg-modelo", "Pronto.", "ok");
+  } catch (e) { msg("msg-modelo", textoErro(e), "erro"); }
+  finally { $("executar-modelo").disabled = false; }
+};
+</script>
+</body>
+</html>
