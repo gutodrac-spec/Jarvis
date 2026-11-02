@@ -48,12 +48,12 @@
 <body>
 <main>
   <h1>🧩 Estúdio</h1>
-  <p class="sub">Use qualquer Space ou modelo do Hugging Face na GPU do seu Studio do ModelScope.</p>
+  <p class="sub">Use qualquer Space ou modelo do Hugging Face na GPU do seu executor (Modal, Studio do ModelScope…).</p>
 
   <section class="painel" id="conexao">
     <div class="linha">
-      <div><label for="url">Endereço do Studio (API)</label>
-        <input id="url" placeholder="https://seu-usuario-executor.ms.show" autocomplete="off"></div>
+      <div><label for="url">Endereço do executor (API)</label>
+        <input id="url" placeholder="https://seu-usuario--executor-executor.modal.run" autocomplete="off"></div>
       <div><label for="chave">Chave (RUNNER_CHAVE)</label>
         <input id="chave" type="password" placeholder="vazio = só o que for público" autocomplete="off"></div>
     </div>
@@ -148,7 +148,7 @@ $("chave").value = ler("estudio-chave");
 
 async function garantirCliente() {
   const url = $("url").value.trim().replace(/\/+$/, "");
-  if (!url) throw new Error("Cole o endereço do Studio.");
+  if (!url) throw new Error("Cole o endereço do executor.");
   if (!cliente || url !== urlAtual) { cliente = await Client.connect(url); urlAtual = url; }
   return cliente;
 }
@@ -175,7 +175,7 @@ async function conectar() {
   guardar("estudio-url", $("url").value.trim());
   guardar("estudio-chave", $("chave").value);
   $("conectar").disabled = true;
-  msg("msg-conexao", "Conectando… (se o Studio estava dormindo, a primeira vez demora)");
+  msg("msg-conexao", "Conectando… (se a GPU estava desligada, a primeira vez leva 1–2 minutos)");
   try {
     cliente = null;
     const [st] = await api("/status");
@@ -184,7 +184,7 @@ async function conectar() {
     msg("msg-conexao", `Conectado. Executor v${st.versao}.`, "ok");
   } catch (e) {
     msg("msg-conexao", "Não consegui conectar: " + textoErro(e) +
-      "\nO xGPU suspende o Studio quando ninguém usa: abra o endereço dele no navegador para acordar e tente de novo.", "erro");
+      "\nA Modal e o xGPU desligam a GPU quando ninguém usa: se ela estava dormindo, abra o endereço no navegador, espere ligar (1–2 min) e tente de novo.", "erro");
   } finally { $("conectar").disabled = false; }
 }
 $("conectar").onclick = conectar;
