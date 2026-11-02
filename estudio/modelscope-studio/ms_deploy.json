@@ -1,0 +1,10 @@
+{
+  "$schema": "https://modelscope.cn/api/v1/studios/deploy_schema.json",
+  "sdk_type": "gradio",
+  "sdk_version": "6.17.3",
+  "base_image": "ubuntu22.04-py312-torch2.10.0-modelscope1.37.0",
+  "resource_configuration": "xgpu/8v-cpu-32g-mem-16g",
+  "environment_variables": [
+    {"name": "ESTUDIO_PLATAFORMA", "value": "modelscope"}
+  ]
+}

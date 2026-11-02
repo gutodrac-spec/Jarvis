@@ -23,6 +23,18 @@ import os
 import random
 import tempfile
 
+# No Studio do ModelScope (servidores na China) o huggingface.co pode estar bloqueado.
+# Se não der para alcançá-lo, os pesos vêm do espelho hf-mirror.com (defina HF_ENDPOINT para escolher outro).
+# Precisa rodar ANTES de importar o gradio/huggingface_hub, que leem a variável na importação.
+if os.environ.get("ESTUDIO_PLATAFORMA") == "modelscope" and not os.environ.get("HF_ENDPOINT"):
+    import urllib.request
+
+    try:
+        urllib.request.urlopen("https://huggingface.co", timeout=8)
+    except Exception:  # noqa: BLE001
+        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+        print("[estudio] huggingface.co inacessível daqui; baixando os modelos de hf-mirror.com")
+
 import gradio as gr
 import torch
 
