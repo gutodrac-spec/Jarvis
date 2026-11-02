@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estúdio</title>
+<style>
+  :root {
+    --bg: #0b0b10; --painel: #15151d; --borda: #26263a; --texto: #ececf4;
+    --suave: #9a9ab0; --destaque: #a78bfa; --destaque-forte: #7c3aed; --erro: #f87171; --ok: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--texto);
+         font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 64px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 26px; }
+  .sub { color: var(--suave); margin: 4px 0 20px; }
+  .conta { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--suave); }
+  .btn { border: 1px solid var(--borda); background: var(--painel); color: var(--texto); border-radius: 10px;
+         padding: 8px 14px; font: inherit; cursor: pointer; }
+  .btn.hf { background: #ffd21e; color: #111; border-color: #ffd21e; font-weight: 600; }
+  .grade { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+  @media (max-width: 820px) { .grade { grid-template-columns: 1fr; } }
+  .painel { background: var(--painel); border: 1px solid var(--borda); border-radius: 14px; padding: 16px; min-width: 0; }
+  label { display: block; font-size: 13px; color: var(--suave); margin: 14px 0 6px; }
+  input, textarea, select { width: 100%; background: var(--bg); color: var(--texto);
+    border: 1px solid var(--borda); border-radius: 10px; padding: 10px; font: inherit; }
+  textarea { resize: vertical; min-height: 80px; }
+  .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+  .preset { background: var(--bg); border: 1px solid var(--borda); border-radius: 10px;
+    padding: 10px 6px; color: var(--texto); cursor: pointer; font-size: 13px; text-align: center; }
+  .preset .ic { display: block; font-size: 20px; }
+  .preset[aria-pressed="true"] { border-color: var(--destaque); box-shadow: 0 0 0 1px var(--destaque) inset; }
+  .linha { display: flex; gap: 10px; } .linha > * { flex: 1; min-width: 0; }
+  button.gerar { width: 100%; margin-top: 18px; padding: 13px; border: 0; border-radius: 12px;
+    background: linear-gradient(90deg, var(--destaque-forte), var(--destaque)); color: white;
+    font-weight: 600; font-size: 16px; cursor: pointer; }
+  button.gerar:disabled { opacity: .5; cursor: wait; }
+  #status { font-size: 13px; min-height: 20px; margin-top: 10px; color: var(--suave); }
+  #status.erro { color: var(--erro); } #status.ok { color: var(--ok); }
+  .aviso { font-size: 13px; color: var(--suave); background: var(--bg); border: 1px dashed var(--borda);
+    border-radius: 10px; padding: 10px; margin-top: 14px; }
+  .resultado video { width: 100%; border-radius: 10px; background: #000; display: block; }
+  .acoes { display: flex; gap: 8px; margin-top: 10px; }
+  .historico { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 16px; }
+  .historico figure { margin: 0; } .historico video { width: 100%; border-radius: 8px; }
+  .historico figcaption { font-size: 12px; color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vazio { color: var(--suave); text-align: center; padding: 60px 0; }
+  a { color: var(--destaque); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>🎬 Estúdio</h1>
+    <div class="conta" id="conta"></div>
+  </header>
+  <p class="sub">Texto ou imagem → vídeo com movimentos de câmera. Grátis, com a GPU do Hugging Face.</p>
+
+  <div class="grade">
+    <section class="painel">
+      <label for="prompt">Prompt (inglês funciona melhor)</label>
+      <textarea id="prompt" placeholder="an astronaut walking through a desert at sunset"></textarea>
+
+      <label for="imagem">Imagem inicial (opcional — anima a sua imagem)</label>
+      <input id="imagem" type="file" accept="image/*">
+
+      <label>Movimento de câmera</label>
+      <div class="presets" id="presets"></div>
+
+      <div class="linha">
+        <div><label for="formato">Formato</label>
+          <select id="formato"><option>16:9</option><option>9:16</option><option>1:1</option></select></div>
+        <div><label for="segundos">Duração</label>
+          <select id="segundos"><option value="2" selected>2 s</option><option value="3">3 s</option>
+            <option value="4">4 s</option><option value="5">5 s</option></select></div>
+      </div>
+
+      <button class="gerar" id="gerar">Gerar vídeo</button>
+      <div id="status"></div>
+      <div class="aviso">
+        Motor: <a href="https://huggingface.co/spaces/Lightricks/ltx-video-distilled" target="_blank" rel="noopener">LTX Video 0.9.8 13B (Lightricks)</a>.
+        Cada vídeo gasta ~1–2 min da <b>sua</b> cota grátis do Hugging Face
+        (5 min/dia com login, 2 min sem). A cota volta 24 h depois do primeiro uso.
+      </div>
+    </section>
+
+    <section class="painel resultado">
+      <div id="atual"><div class="vazio">Seu vídeo aparece aqui.</div></div>
+      <div class="historico" id="historico"></div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.1/dist/browser.js";
+
+const MOTOR = "Lightricks/ltx-video-distilled";
+const NEGATIVO = "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text";
+const FORMATOS = { "16:9": [704, 384], "9:16": [384, 704], "1:1": [512, 512] }; // largura, altura (múltiplos de 32)
+const PRESETS = [
+  ["Livre", "✏️", ""],
+  ["Dolly In", "⏩", "slow dolly in toward the subject, smooth forward camera push"],
+  ["Dolly Out", "⏪", "slow dolly out away from the subject, camera pulling back revealing the scene"],
+  ["Crash Zoom", "💥", "sudden fast crash zoom into the subject, dramatic snap zoom"],
+  ["Órbita 360", "🔄", "camera orbits 360 degrees around the subject, smooth circular tracking shot"],
+  ["Drone FPV", "🚁", "fast FPV drone shot flying through the scene, dynamic banking and diving"],
+  ["Grua", "🏗️", "crane shot rising up and tilting down, revealing the landscape from above"],
+  ["Pan ←", "⬅️", "smooth camera pan from right to left"],
+  ["Pan →", "➡️", "smooth camera pan from left to right"],
+  ["Tilt ↑", "⬆️", "camera tilts up slowly from the ground to the sky"],
+  ["Na mão", "✋", "handheld camera, natural shake, documentary style"],
+  ["Bullet Time", "🕶️", "bullet time effect, frozen moment while the camera arcs around the subject"],
+  ["Snorricam", "🎯", "snorricam shot, camera rigidly attached to the subject, background moving"],
+  ["Dolly Zoom", "🌀", "dolly zoom vertigo effect, background warps while the subject stays the same size"],
+  ["Super Dolly", "🚀", "fast push in through the scene, epic cinematic super dolly move"],
+  ["Estático", "📷", "static locked-off camera, tripod shot, no camera movement"],
+];
+const $ = (id) => document.getElementById(id);
+const guardar = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
+const ler = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const status = (txt, tipo = "") => { $("status").textContent = txt; $("status").className = tipo; };
+
+// ---------- Presets ----------
+let preset = PRESETS[1];
+for (const p of PRESETS) {
+  const b = document.createElement("button");
+  b.className = "preset"; b.type = "button";
+  b.innerHTML = `<span class="ic">${p[1]}</span>${p[0]}`;
+  b.setAttribute("aria-pressed", p === preset);
+  b.onclick = () => {
+    preset = p;
+    document.querySelectorAll(".preset").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  };
+  $("presets").append(b);
+}
+
+// ---------- Login com Hugging Face (cada visitante usa a própria cota) ----------
+let sessao = null;
+try { sessao = JSON.parse(ler("estudio-sessao") || "null"); } catch {}
+if (sessao && new Date(sessao.expira) < new Date()) sessao = null;
+
+async function hub() {
+  return import("https://cdn.jsdelivr.net/npm/@huggingface/hub@2.17.7/+esm");
+}
+
+async function iniciarLogin() {
+  try {
+    const { oauthLoginUrl } = await hub();
+    const vars = window.huggingface?.variables || {};
+    window.location.href = await oauthLoginUrl({ scopes: vars.OAUTH_SCOPES });
+  } catch (e) {
+    status("Não consegui abrir o login: " + (e?.message || e), "erro");
+  }
+}
+
+async function tratarRetornoDoLogin() {
+  if (!/[?&#](code|state)=/.test(window.location.href)) return;
+  try {
+    const { oauthHandleRedirectIfPresent } = await hub();
+    const r = await oauthHandleRedirectIfPresent();
+    if (r) {
+      sessao = { token: r.accessToken, nome: r.userInfo?.preferred_username || r.userInfo?.name,
+                 expira: r.accessTokenExpiresAt };
+      guardar("estudio-sessao", JSON.stringify(sessao));
+      history.replaceState(null, "", window.location.pathname);
+    }
+  } catch (e) {
+    status("O login não completou: " + (e?.message || e), "erro");
+  }
+}
+
+function desenharConta() {
+  const el = $("conta");
+  el.innerHTML = "";
+  if (sessao) {
+    el.append(Object.assign(document.createElement("span"), { textContent: `Conectado como ${sessao.nome}` }));
+    const sair = Object.assign(document.createElement("button"), { className: "btn", textContent: "Sair" });
+    sair.onclick = () => { sessao = null; guardar("estudio-sessao", null); desenharConta(); };
+    el.append(sair);
+  } else {
+    el.append(Object.assign(document.createElement("span"), { textContent: "Sem login: 2 min/dia" }));
+    const entrar = Object.assign(document.createElement("button"),
+      { className: "btn hf", textContent: "🤗 Entrar (5 min/dia)" });
+    entrar.onclick = iniciarLogin;
+    el.append(entrar);
+  }
+}
+
+await tratarRetornoDoLogin();
+desenharConta();
+
+// ---------- Geração ----------
+const historico = [];
+function mostrar(url, legenda) {
+  $("atual").innerHTML = `<video src="${url}" controls autoplay loop playsinline></video>
+    <div class="acoes"><a class="btn" href="${url}" download="estudio.mp4" target="_blank" rel="noopener">⬇️ Baixar</a></div>`;
+  historico.unshift({ url, legenda });
+  $("historico").innerHTML = historico.slice(1).map((h) =>
+    `<figure><video src="${h.url}" muted loop playsinline onmouseenter="this.play()" onmouseleave="this.pause()"></video>
+     <figcaption title="${h.legenda.replace(/"/g, "&quot;")}">${h.legenda.replace(/</g, "&lt;")}</figcaption></figure>`).join("");
+}
+
+function explicarErro(msg) {
+  const m = String(msg || "");
+  if (/quota|GPU limit|exceeded/i.test(m)) {
+    return "Sua cota grátis de GPU acabou por hoje. " +
+      (sessao ? "Ela volta 24 h depois do primeiro uso." : "Entre com sua conta do Hugging Face para ter mais cota.");
+  }
+  if (/sleep|paused|building/i.test(m)) return "O motor está acordando. Tente de novo em 1 minuto.";
+  return "Erro: " + m;
+}
+
+$("gerar").onclick = async () => {
+  const prompt = $("prompt").value.trim();
+  const arquivo = $("imagem").files[0];
+  if (!prompt && !arquivo) return status("Escreva um prompt ou envie uma imagem.", "erro");
+
+  const [largura, altura] = FORMATOS[$("formato").value];
+  const texto = [prompt || "the scene comes to life", preset[2], "cinematic, high quality, smooth motion"]
+    .filter(Boolean).join(", ");
+  const modo = arquivo ? "image-to-video" : "text-to-video";
+  // Mesma ordem de entradas do Space da Lightricks:
+  // prompt, negativo, imagem, vídeo, altura, largura, modo, duração, quadros do vídeo, semente, aleatória, CFG, textura
+  const entradas = [texto, NEGATIVO, arquivo ? handle_file(arquivo) : null, null, altura, largura, modo,
+                    Number($("segundos").value), 9, 42, true, 1.0, true];
+
+  $("gerar").disabled = true;
+  status("Conectando ao motor…");
+  try {
+    const cliente = await Client.connect(MOTOR, sessao ? { token: sessao.token } : {});
+    const job = cliente.submit(arquivo ? "/image_to_video" : "/text_to_video", entradas);
+    let saida = null;
+    for await (const ev of job) {
+      if (ev.type === "status") {
+        if (ev.stage === "error") throw new Error(ev.message || "falhou");
+        if (ev.stage === "pending") {
+          status(ev.position != null ? `Na fila: posição ${ev.position + 1}…` : "Na fila…");
+        } else if (ev.stage === "generating") {
+          status("Gerando o vídeo na GPU…");
+        }
+      } else if (ev.type === "data") {
+        saida = ev.data;
+        break;
+      }
+    }
+    const v = saida?.[0];
+    const url = v?.video?.url || v?.url;
+    if (!url) throw new Error("o motor não devolveu um vídeo");
+    mostrar(url, `${preset[0]} · ${prompt || "imagem"}`);
+    status(`Pronto! Semente ${saida[1]}.`, "ok");
+  } catch (e) {
+    status(explicarErro(e?.message || e), "erro");
+  } finally {
+    $("gerar").disabled = false;
+  }
+};
+</script>
+</body>
+</html>
