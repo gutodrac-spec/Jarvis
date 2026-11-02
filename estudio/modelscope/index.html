@@ -128,6 +128,11 @@
         <div class="dica">Só se o navegador bloquear o ModelScope (erro de CORS). Veja o worker.js no repositório.</div>
         <label for="llm">Modelo para melhorar o prompt</label>
         <input id="llm" placeholder="Qwen/Qwen2.5-72B-Instruct">
+        <label for="hf-token">Token do Hugging Face (opcional, para o vídeo no ZeroGPU)</label>
+        <input id="hf-token" type="password" placeholder="hf_...">
+        <div class="dica">Fora de um Space o botão "Entrar" não funciona. Crie um token <b>read</b> em
+          <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a>
+          para usar a sua cota de 5 min/dia. Fica só no seu navegador.</div>
       </details>
     </section>
 
@@ -223,7 +228,8 @@ for (const p of PRESETS) {
 $("ms-token").value = ler("ms-token") || "";
 $("ms-proxy").value = ler("ms-proxy") || "";
 $("llm").value = ler("ms-llm") || "";
-for (const [id, chave] of [["ms-token", "ms-token"], ["ms-proxy", "ms-proxy"], ["llm", "ms-llm"]]) {
+$("hf-token").value = ler("hf-token") || "";
+for (const [id, chave] of [["ms-token", "ms-token"], ["ms-proxy", "ms-proxy"], ["llm", "ms-llm"], ["hf-token", "hf-token"]]) {
   $(id).addEventListener("change", () => guardar(chave, $(id).value.trim()));
 }
 
@@ -279,7 +285,14 @@ function adicionar(item) {
 }
 
 // ================= ModelScope (imagens e texto) =================
-function msBase() { return ($("ms-proxy").value.trim() || MS_API).replace(/\/+$/, ""); }
+// Se a página está hospedada na Vercel (pasta estudio/vercel), existe uma função em /ms que repassa
+// as chamadas ao ModelScope no mesmo domínio: sem CORS e sem proxy externo.
+let proxyLocal = null;
+try {
+  const r = await fetch("/ms/ping", { cache: "no-store" });
+  if (r.ok && (await r.text()).trim() === "ok") proxyLocal = "/ms";
+} catch {}
+function msBase() { return ($("ms-proxy").value.trim() || proxyLocal || MS_API).replace(/\/+$/, ""); }
 function msToken() {
   const t = $("ms-token").value.trim();
   if (!t) { $("config").open = true; throw new Error("Coloque seu token do ModelScope em ⚙️ Configurações."); }
@@ -369,7 +382,8 @@ async function hfLogin() {
     const { oauthLoginUrl } = await import(HUB_CDN);
     const vars = window.huggingface?.variables || {};
     if (!vars.OAUTH_CLIENT_ID) {
-      return status("O login do Hugging Face só funciona com a página hospedada num Space com hf_oauth: true.", "erro");
+      $("config").open = true;
+      return status("Aqui o login automático não funciona (só dentro de um Space). Cole um token do Hugging Face em ⚙️ Configurações.", "erro");
     }
     window.location.href = await oauthLoginUrl({ scopes: vars.OAUTH_SCOPES });
   } catch (e) { status("Não consegui abrir o login: " + e.message, "erro"); }
@@ -449,7 +463,8 @@ async function gerarVideo(prompt) {
   const entradas = [texto, NEGATIVO_VIDEO, inicial, null, altura, largura, modo,
                     Number($("segundos").value), 9, 42, true, 1.0, true];
   status("Conectando ao ZeroGPU…");
-  const cliente = await Client.connect(MOTOR_VIDEO, sessao ? { token: sessao.token } : {});
+  const tokenHf = sessao?.token || $("hf-token").value.trim();
+  const cliente = await Client.connect(MOTOR_VIDEO, /^hf_/.test(tokenHf) ? { token: tokenHf } : {});
   const job = cliente.submit(inicial ? "/image_to_video" : "/text_to_video", entradas);
   for await (const ev of job) {
     if (ev.type === "status") {
@@ -470,7 +485,8 @@ function explicarErroVideo(m) {
     return "O ModelScope só roda 1 vídeo por vez na conta grátis. Espere o anterior terminar e tente de novo.";
   }
   if (/quota|GPU limit|exceeded/i.test(m)) return "Sua cota grátis de GPU acabou por hoje. " +
-    (sessao ? "Ela volta 24 h depois do primeiro uso." : "Entre com sua conta do Hugging Face para ter mais.");
+    (sessao || /^hf_/.test($("hf-token").value.trim()) ? "Ela volta 24 h depois do primeiro uso."
+      : "Entre com sua conta do Hugging Face (ou cole um token em ⚙️ Configurações) para ter mais.");
   if (/sleep|paused|building/i.test(m)) return "O motor de vídeo está acordando. Tente de novo em 1 minuto.";
   return "Erro no vídeo: " + m;
 }
