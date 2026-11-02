@@ -1,0 +1,5 @@
+# o executor ignora torch, spaces e gradio; só "pillow" (já instalado) deve restar
+torch==2.1.0
+spaces
+gradio==4.0.0
+pillow

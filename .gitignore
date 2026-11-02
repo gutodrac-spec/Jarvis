@@ -4,3 +4,7 @@ __pycache__/
 client_secret*.json
 token*.json
 .duet/
+
+# testes
+estudio/runner/dados/
+estudio/runner/testes/locais/tiny/
